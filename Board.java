@@ -134,8 +134,8 @@ public class Board {
                     col + count < gameState[row].length && 
                     gameState[row + count][col + count] == player) {
                         isConsecutive = false;
-                    } else if (row - 1 <= 0 &&
-                    col - 1 <= 0 &&
+                    } else if (row - 1 >= 0 &&
+                    col - 1 >= 0 &&
                     gameState[row - 1][col - 1] == player) {
                         isConsecutive = false;
                     }
@@ -161,6 +161,7 @@ public class Board {
                     col + count < gameState[row].length && 
                     gameState[row - count][col + count] == player) {
                         isConsecutive = false;
+                        // TODO BUG BELOW 
                     } else if (row + 1 < gameState.length &&
                     col - 1 >= 0 &&
                     gameState[row + 1][col - 1] == player) {
