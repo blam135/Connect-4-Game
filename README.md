@@ -1,2 +1,1 @@
-# Connect4Game
-Assignment 1 for COMP3608
+To play unzip the Connect4.zip folder and then click the run.bat file and a terminal should open up
