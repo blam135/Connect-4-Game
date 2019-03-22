@@ -48,6 +48,15 @@ public class Board {
         return score('r') - score('y');
     }
 
+    public int utility() {
+        if (numInARow(4, 'r') > 0) {
+            return 10000;
+        } else if (numInARow(4, 'y') > 0) {
+            return -10000;
+        } 
+        return 0;
+    }
+
     public int score(char player) {
         int tokensOnBoard;
 
@@ -72,103 +81,66 @@ public class Board {
                     // ----- Vertical Checks ------- 
                     boolean isConsecutive = true;
                     for (int x = 0; x < count; x++) {
-                        if (row + x >= gameState.length) {
+                        if (row + x >= gameState.length || gameState[row + x][col] != player) {
                             isConsecutive = false;
                             break;
                         } 
-                        if (gameState[row + x][col] != player) {
-                            isConsecutive = false;
-                            break;
-                        }
                     }
-                    if (row + count < gameState.length &&
-                    gameState[row + count][col] == player) {
+                    if ( (row + count < gameState.length && gameState[row + count][col] == player) || (row - 1 >= 0 && gameState[row - 1][col] == player) ) {
                         isConsecutive = false;
-                    } else if (row - 1 >= 0 &&
-                    gameState[row - 1][col] == player) {
-                        isConsecutive = false;
-                    }
+                    } 
                     if (isConsecutive) {
-                        System.out.println("Found vertical in row:" + row + " col:" + col);
+                        // System.out.println("Found vertical in row:" + row + " col:" + col);
                         consecutiveTokens++;                        
                     }
 
                     // ----- Horizontal Checks ------- 
                     isConsecutive = true;
                     for (int x = 0; x < count; x++) {
-                        if (col + x >= gameState[row].length) {
+                        if (col + x >= gameState[row].length || gameState[row][col + x] != player) {
                             isConsecutive = false;
                             break;
                         } 
-                        if (gameState[row][col + x] != player) {
-                            isConsecutive = false;
-                            break;
-                        }
                     }
-                    if (col + count < gameState.length &&
-                    gameState[row][col + count] == player) {
+                    if ( (col + count < gameState[row].length && gameState[row][col + count] == player) || (col - 1 >= 0 && gameState[row][col - 1] == player) ) {
                         isConsecutive = false;
-                    } else if (col - 1 >= 0 &&
-                    gameState[row][col - 1] == player) {
-                        isConsecutive = false;
-                    }
+                    } 
                     if (isConsecutive) {
-                        System.out.println("Found horizontal in row:" + row + " col:" + col);
+                        // System.out.println("Found horizontal in row:" + row + " col:" + col);
                         consecutiveTokens++;                        
                     }
 
                     // ----- Diagonal Down Checks ------- 
                     isConsecutive = true;
                     for (int x = 0; x < count; x++) {
-                        if (row + x >= gameState.length ||
-                            col + x >= gameState[row].length) {
-                                isConsecutive = false;
-                                break;
-                        } 
-                        if (gameState[row + x][col + x] != player) {
+                        if (row + x >= gameState.length || col + x >= gameState[row].length || gameState[row + x][col + x] != player) {
                             isConsecutive = false;
                             break;
-                        }
+                        } 
                     }
-                    if (row + count < gameState.length &&
-                    col + count < gameState[row].length && 
-                    gameState[row + count][col + count] == player) {
-                        isConsecutive = false;
-                    } else if (row - 1 >= 0 &&
-                    col - 1 >= 0 &&
-                    gameState[row - 1][col - 1] == player) {
+                    if ( (row + count < gameState.length && col + count < gameState[row].length && gameState[row + count][col + count] == player) ||
+                    (row - 1 >= 0 && col - 1 >= 0 && gameState[row - 1][col - 1] == player) ){
                         isConsecutive = false;
                     }
                     if (isConsecutive) {
-                        System.out.println("Found diagonal down in row:" + row + " col:" + col);
+                        // System.out.println("Found diagonal down in row:" + row + " col:" + col);
                         consecutiveTokens++;                        
                     }
 
                     // ----- Diagonal Up Checks ------- 
                     isConsecutive = true;
                     for (int x = 0; x < count; x++) {
-                        if (row - x < 0 ||
-                            col + x >= gameState.length ) {
-                                isConsecutive = false;
-                                break;
-                        } 
-                        if (gameState[row - x][col + x] != player) {
+                        if (row - x < 0 || col + x >= gameState[row].length || gameState[row - x][col + x] != player) {
                             isConsecutive = false;
                             break;
-                        }
+                        } 
                     }
-                    if (row - count >= 0 &&
-                    col + count < gameState[row].length && 
-                    gameState[row - count][col + count] == player) {
+                    if ((row - count >= 0 && col + count < gameState[row].length && gameState[row - count][col + count] == player) || 
+                        (row + 1 < gameState.length && col - 1 >= 0 && gameState[row + 1][col - 1] == player) ){
                         isConsecutive = false;
-                        // TODO BUG BELOW 
-                    } else if (row + 1 < gameState.length &&
-                    col - 1 >= 0 &&
-                    gameState[row + 1][col - 1] == player) {
-                        isConsecutive = false;
-                    }
+                    } 
                     if (isConsecutive) {
-                        System.out.println("Found diagonal up in row:" + row + " col:" + col);
+                        // System.out.println("Found diagonal up in row:" + row + " col:" + col);
                         consecutiveTokens++;                        
                     }
 
