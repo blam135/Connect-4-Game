@@ -1,0 +1,1 @@
+To play unzip the Connect4.zip folder and then click the run.bat file and a terminal should open up
