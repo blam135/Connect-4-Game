@@ -1,3 +1,5 @@
+package com.example.connectfour.core;
+
 public class Computer {
 
     private int nodesTraversed = 0;

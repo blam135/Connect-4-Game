@@ -1,4 +1,9 @@
-import java.util.*;
+package com.example.connectfour.legacy;
+
+import java.util.Scanner;
+
+import com.example.connectfour.core.Board;
+import com.example.connectfour.core.Computer;
 
 public class ConnectFour {
     public static void main(String[] args) {
@@ -61,6 +66,7 @@ public class ConnectFour {
                     b.printBoard();
                 }
             } catch (InterruptedException e) {
+                scan.close();
                 System.out.println("Game has exited");
                 return;
             }
