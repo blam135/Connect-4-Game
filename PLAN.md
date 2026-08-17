@@ -185,12 +185,12 @@ feat(backend): add game session service
 
 #### 2.4 Add the WebSocket transport
 
-- [ ] Register a raw WebSocket handler at `/ws/game`.
-- [ ] Implement the agreed JSON message protocol.
-- [ ] Bind each connection to its current game.
-- [ ] Make the latest resumed socket authoritative.
-- [ ] Return structured recoverable and non-recoverable errors.
-- [ ] Add serialization, malformed-message, reconnect, and integration tests.
+- [x] Register a raw WebSocket handler at `/ws/game`.
+- [x] Implement the agreed JSON message protocol.
+- [x] Bind each connection to its current game.
+- [x] Make the latest resumed socket authoritative.
+- [x] Return structured recoverable and non-recoverable errors.
+- [x] Add serialization, malformed-message, reconnect, and integration tests.
 
 Suggested commit:
 
