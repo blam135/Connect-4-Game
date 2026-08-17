@@ -21,6 +21,7 @@ export type GameSocket = {
   connectionState: ConnectionState
   game: GameState | null
   error: GameError | null
+  isAwaitingResponse: boolean
   sendMessage: (message: ClientMessage) => boolean
   reconnect: () => void
   clearError: () => void
@@ -69,6 +70,7 @@ export function useGameSocket(): GameSocket {
     useState<ConnectionState>('connecting')
   const [game, setGame] = useState<GameState | null>(null)
   const [error, setError] = useState<GameError | null>(null)
+  const [isAwaitingResponse, setIsAwaitingResponse] = useState(false)
   const [connectionRequest, setConnectionRequest] = useState(0)
   const socketRef = useRef<WebSocket | null>(null)
 
@@ -101,7 +103,10 @@ export function useGameSocket(): GameSocket {
             type: 'RESUME_GAME',
             payload: { gameId },
           }
+          setIsAwaitingResponse(true)
           socket.send(JSON.stringify(resumeMessage))
+        } else {
+          setIsAwaitingResponse(false)
         }
       }
 
@@ -111,6 +116,7 @@ export function useGameSocket(): GameSocket {
         }
 
         const message = parseServerMessage(event.data)
+        setIsAwaitingResponse(false)
         if (message === null) {
           setError(invalidServerMessage())
           return
@@ -146,6 +152,7 @@ export function useGameSocket(): GameSocket {
         }
 
         socketRef.current = null
+        setIsAwaitingResponse(false)
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
           setConnectionState('disconnected')
           setError({
@@ -188,10 +195,12 @@ export function useGameSocket(): GameSocket {
     }
 
     socket.send(JSON.stringify(message))
+    setIsAwaitingResponse(true)
     return true
   }, [])
 
   const reconnect = useCallback(() => {
+    setIsAwaitingResponse(false)
     setConnectionRequest((request) => request + 1)
   }, [])
 
@@ -201,6 +210,7 @@ export function useGameSocket(): GameSocket {
     connectionState,
     game,
     error,
+    isAwaitingResponse,
     sendMessage,
     reconnect,
     clearError,

@@ -228,11 +228,11 @@ feat(frontend): add WebSocket game client
 
 #### 3.3 Add the playable UI
 
-- [ ] Add color and starting-player setup.
-- [ ] Build an accessible responsive 7x6 board.
-- [ ] Add status, loading, terminal, and error states.
-- [ ] Add New Game and reconnect behavior.
-- [ ] Test the complete browser game flow.
+- [x] Add color and starting-player setup.
+- [x] Build an accessible responsive 7x6 board.
+- [x] Add status, loading, terminal, and error states.
+- [x] Add New Game and reconnect behavior.
+- [x] Test the complete browser game flow.
 
 Suggested commit:
 

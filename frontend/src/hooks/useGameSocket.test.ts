@@ -1,46 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installMockBrowserApis, MockWebSocket } from '../test/MockWebSocket'
 import type { ServerMessage } from '../types/protocol'
 import { GAME_ID_STORAGE_KEY, useGameSocket } from './useGameSocket'
-
-class MockWebSocket {
-  static readonly CONNECTING = 0
-  static readonly OPEN = 1
-  static readonly CLOSING = 2
-  static readonly CLOSED = 3
-  static instances: MockWebSocket[] = []
-
-  readonly url: string
-  readyState = MockWebSocket.CONNECTING
-  onopen: ((event: Event) => void) | null = null
-  onmessage: ((event: MessageEvent) => void) | null = null
-  onclose: ((event: CloseEvent) => void) | null = null
-  send = vi.fn()
-  close = vi.fn(() => {
-    this.readyState = MockWebSocket.CLOSED
-  })
-
-  constructor(url: string | URL) {
-    this.url = String(url)
-    MockWebSocket.instances.push(this)
-  }
-
-  open() {
-    this.readyState = MockWebSocket.OPEN
-    this.onopen?.(new Event('open'))
-  }
-
-  receive(message: ServerMessage) {
-    this.onmessage?.(
-      new MessageEvent('message', { data: JSON.stringify(message) }),
-    )
-  }
-
-  disconnect() {
-    this.readyState = MockWebSocket.CLOSED
-    this.onclose?.(new CloseEvent('close'))
-  }
-}
 
 const gameState: Extract<ServerMessage, { type: 'GAME_STATE' }> = {
   type: 'GAME_STATE',
@@ -54,26 +16,9 @@ const gameState: Extract<ServerMessage, { type: 'GAME_STATE' }> = {
   },
 }
 
-function createStorage(): Storage {
-  const values = new Map<string, string>()
-
-  return {
-    get length() {
-      return values.size
-    },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => Array.from(values.keys())[index] ?? null,
-    removeItem: (key) => values.delete(key),
-    setItem: (key, value) => values.set(key, value),
-  }
-}
-
 describe('useGameSocket', () => {
   beforeEach(() => {
-    MockWebSocket.instances = []
-    vi.stubGlobal('localStorage', createStorage())
-    vi.stubGlobal('WebSocket', MockWebSocket)
+    installMockBrowserApis()
   })
 
   afterEach(() => {
@@ -208,5 +153,18 @@ describe('useGameSocket', () => {
     act(() => socket.open())
     act(() => expect(result.current.sendMessage(command)).toBe(true))
     expect(socket.send).toHaveBeenLastCalledWith(JSON.stringify(command))
+    expect(result.current.isAwaitingResponse).toBe(true)
+
+    act(() =>
+      socket.receive({
+        type: 'ERROR',
+        payload: {
+          code: 'COLUMN_FULL',
+          message: 'Column is full',
+          recoverable: true,
+        },
+      }),
+    )
+    expect(result.current.isAwaitingResponse).toBe(false)
   })
 })
