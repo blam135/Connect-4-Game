@@ -202,9 +202,9 @@ feat(backend): add WebSocket game protocol
 
 #### 3.1 Scaffold React
 
-- [ ] Create `frontend/` with React, TypeScript, and Vite on Node 24 LTS.
-- [ ] Add frontend tests and shared protocol types.
-- [ ] Configure Vite to proxy `/ws` to Spring Boot in development.
+- [x] Create `frontend/` with React, TypeScript, and Vite on Node 24 LTS.
+- [x] Add frontend tests and shared protocol types.
+- [x] Configure Vite to proxy `/ws` to Spring Boot in development.
 
 Suggested commit:
 
