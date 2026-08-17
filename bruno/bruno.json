@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Connect Four WebSocket API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

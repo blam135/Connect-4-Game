@@ -1,0 +1,82 @@
+meta {
+  name: Protocol errors
+  type: ws
+  seq: 6
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: 1. Malformed JSON
+  type: text
+  selected: true
+  content: '''
+    {
+  '''
+}
+
+body:ws {
+  name: 2. Unknown message
+  type: json
+  content: '''
+    {
+      "type": "NOT_A_COMMAND",
+      "payload": {}
+    }
+  '''
+}
+
+body:ws {
+  name: 3. Drop without active game
+  type: json
+  content: '''
+    {
+      "type": "DROP_COUNTER",
+      "payload": {
+        "column": 0
+      }
+    }
+  '''
+}
+
+body:ws {
+  name: 4. Invalid start configuration
+  type: json
+  content: '''
+    {
+      "type": "START_GAME",
+      "payload": {
+        "firstPlayer": "HUMAN"
+      }
+    }
+  '''
+}
+
+body:ws {
+  name: 5. Unknown game
+  type: json
+  content: '''
+    {
+      "type": "RESUME_GAME",
+      "payload": {
+        "gameId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  '''
+}
+
+docs {
+  Connect once and send these messages individually. The server should return:
+
+  1. MALFORMED_MESSAGE, recoverable true
+  2. UNKNOWN_MESSAGE, recoverable true
+  3. NO_ACTIVE_GAME, recoverable true
+  4. INVALID_CONFIGURATION, recoverable true
+  5. GAME_NOT_FOUND, recoverable false
+
+  Error responses do not close this WebSocket connection.
+}

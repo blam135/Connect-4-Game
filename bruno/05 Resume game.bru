@@ -1,0 +1,56 @@
+meta {
+  name: Resume game
+  type: ws
+  seq: 5
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: 1. Resume game
+  type: json
+  selected: true
+  content: '''
+    {
+      "type": "RESUME_GAME",
+      "payload": {
+        "gameId": "{{gameId}}"
+      }
+    }
+  '''
+}
+
+body:ws {
+  name: 2. Drop counter after resume
+  type: json
+  content: '''
+    {
+      "type": "DROP_COUNTER",
+      "payload": {
+        "column": {{column}}
+      }
+    }
+  '''
+}
+
+body:ws {
+  name: 3. Abandon resumed game
+  type: json
+  content: '''
+    {
+      "type": "ABANDON_GAME",
+      "payload": {}
+    }
+  '''
+}
+
+docs {
+  Start a game with the Start game request, copy its gameId into the Local
+  environment, and keep the original connection open. Connect this request and
+  send Resume game. The server restores the game here and closes the original
+  connection because this socket is now authoritative.
+}

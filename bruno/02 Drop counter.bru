@@ -1,0 +1,33 @@
+meta {
+  name: Drop counter
+  type: ws
+  seq: 2
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: Drop counter
+  type: json
+  selected: true
+  content: '''
+    {
+      "type": "DROP_COUNTER",
+      "payload": {
+        "column": {{column}}
+      }
+    }
+  '''
+}
+
+docs {
+  Drops a counter into a zero-indexed column from 0 through 6.
+
+  The server requires this command on the same WebSocket connection that
+  started or resumed the game. Because each .bru request opens its own
+  connection, invoking this standalone request returns NO_ACTIVE_GAME.
+}

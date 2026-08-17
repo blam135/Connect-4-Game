@@ -1,0 +1,33 @@
+meta {
+  name: Invalid column
+  type: ws
+  seq: 3
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: Invalid column
+  type: json
+  selected: true
+  content: '''
+    {
+      "type": "DROP_COUNTER",
+      "payload": {
+        "column": 99
+      }
+    }
+  '''
+}
+
+docs {
+  Exercises the INVALID_COLUMN response.
+
+  The server checks for an active game before validating the column, so this
+  payload must be sent on the same connection that started or resumed a game.
+  Invoking this standalone request returns NO_ACTIVE_GAME instead.
+}

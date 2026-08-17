@@ -1,0 +1,30 @@
+meta {
+  name: Abandon game
+  type: ws
+  seq: 4
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: Abandon game
+  type: json
+  selected: true
+  content: '''
+    {
+      "type": "ABANDON_GAME",
+      "payload": {}
+    }
+  '''
+}
+
+docs {
+  Abandons the game bound to the current WebSocket connection.
+
+  Because each .bru request opens its own connection, invoking this standalone
+  request returns NO_ACTIVE_GAME unless the connection was previously bound.
+}

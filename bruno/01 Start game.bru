@@ -1,0 +1,31 @@
+meta {
+  name: Start game
+  type: ws
+  seq: 1
+}
+
+ws {
+  url: {{wsUrl}}
+  body: ws
+  auth: inherit
+}
+
+body:ws {
+  name: Start game
+  type: json
+  selected: true
+  content: '''
+    {
+      "type": "START_GAME",
+      "payload": {
+        "humanColor": "{{humanColor}}",
+        "firstPlayer": "{{firstPlayer}}"
+      }
+    }
+  '''
+}
+
+docs {
+  Starts a game and binds it to this WebSocket connection. Copy payload.gameId
+  from the GAME_STATE response into the Local environment to test Resume game.
+}
