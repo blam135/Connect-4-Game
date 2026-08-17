@@ -10,6 +10,21 @@ export type GameStatus =
   | 'COMPUTER_WON'
   | 'DRAW'
 
+export type GameState = {
+  gameId: string
+  board: Cell[][]
+  status: GameStatus
+  humanColor: PlayerColor
+  firstPlayer: FirstPlayer
+  computerColumn: number | null
+}
+
+export type GameError = {
+  code: string
+  message: string
+  recoverable: boolean
+}
+
 export type ClientMessage =
   | {
       type: 'START_GAME'
@@ -34,14 +49,7 @@ export type ClientMessage =
 export type ServerMessage =
   | {
       type: 'GAME_STATE'
-      payload: {
-        gameId: string
-        board: Cell[][]
-        status: GameStatus
-        humanColor: PlayerColor
-        firstPlayer: FirstPlayer
-        computerColumn: number | null
-      }
+      payload: GameState
     }
   | {
       type: 'GAME_ABANDONED'
@@ -49,9 +57,5 @@ export type ServerMessage =
     }
   | {
       type: 'ERROR'
-      payload: {
-        code: string
-        message: string
-        recoverable: boolean
-      }
+      payload: GameError
     }

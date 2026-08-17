@@ -214,11 +214,11 @@ build(frontend): scaffold React client
 
 #### 3.2 Add the WebSocket client
 
-- [ ] Add a typed React WebSocket hook.
-- [ ] Store and resume the current game ID.
-- [ ] Retry unexpected disconnects with bounded backoff.
-- [ ] Handle stale games after a backend restart.
-- [ ] Test connection lifecycle behavior with a mocked WebSocket.
+- [x] Add a typed React WebSocket hook.
+- [x] Store and resume the current game ID.
+- [x] Retry unexpected disconnects with bounded backoff.
+- [x] Handle stale games after a backend restart.
+- [x] Test connection lifecycle behavior with a mocked WebSocket.
 
 Suggested commit:
 
