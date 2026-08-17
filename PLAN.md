@@ -244,11 +244,11 @@ feat(frontend): add playable game UI
 
 #### 4.1 Containerize the application
 
-- [ ] Add a multi-stage Java backend image.
-- [ ] Add a multi-stage Node and Nginx frontend image.
-- [ ] Configure Nginx to serve React and proxy WebSocket upgrades.
-- [ ] Add focused Docker ignore files and Docker Compose.
-- [ ] Verify a complete game through the containerized frontend.
+- [x] Add a multi-stage Java backend image.
+- [x] Add a multi-stage Node and Nginx frontend image.
+- [x] Configure Nginx to serve React and proxy WebSocket upgrades.
+- [x] Add focused Docker ignore files and Docker Compose.
+- [x] Verify a complete game through the containerized frontend.
 
 Suggested commit:
 
