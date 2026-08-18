@@ -8,7 +8,7 @@
 		<version>4.1.0</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.example</groupId>
+	<groupId>io.github.blam135</groupId>
 	<artifactId>connect-four-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>connect-four-backend</name>

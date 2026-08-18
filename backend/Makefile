@@ -15,7 +15,7 @@ run:
 
 cli:
 	./mvnw compile
-	java -cp target/classes com.example.connectfour.legacy.ConnectFour
+	java -cp target/classes io.github.blam135.connectfour.legacy.ConnectFour
 
 test:
 	./mvnw test

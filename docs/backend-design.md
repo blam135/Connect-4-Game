@@ -11,7 +11,7 @@ For the complete wire contract and runtime flows, see
 
 ```mermaid
 flowchart LR
-    Boot["com.example.connectfour<br/>application bootstrap"]
+    Boot["io.github.blam135.connectfour<br/>application bootstrap"]
     Config["config<br/>Spring and WebSocket configuration"]
     Transport["websocket<br/>controller-equivalent transport boundary"]
     Service["service<br/>use-case orchestration"]
