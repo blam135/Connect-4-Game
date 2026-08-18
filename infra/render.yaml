@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: connect-four-game
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./infra/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeployTrigger: commit
