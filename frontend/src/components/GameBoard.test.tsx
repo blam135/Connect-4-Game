@@ -16,10 +16,14 @@ function boardWith(...counters: Array<[number, number, Cell]>) {
 function game(board: Cell[][], computerColumn: number | null): GameState {
   return {
     gameId: '6484817f-89d1-4518-874a-dba30795a481',
+    mode: 'COMPUTER',
     board,
     status: 'IN_PROGRESS',
-    humanColor: 'RED',
-    firstPlayer: 'HUMAN',
+    yourColor: 'RED',
+    startingColor: 'RED',
+    currentTurn: 'RED',
+    roomCode: null,
+    opponentConnected: true,
     computerColumn,
   }
 }

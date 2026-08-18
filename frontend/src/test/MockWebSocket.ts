@@ -34,9 +34,15 @@ export class MockWebSocket {
     )
   }
 
-  disconnect() {
+  disconnect(code = 1006, reason = '') {
     this.readyState = MockWebSocket.CLOSED
-    this.onclose?.(new CloseEvent('close'))
+    this.onclose?.(
+      new CloseEvent('close', {
+        code,
+        reason,
+        wasClean: code === 1000,
+      }),
+    )
   }
 }
 

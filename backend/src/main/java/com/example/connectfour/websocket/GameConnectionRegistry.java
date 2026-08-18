@@ -1,6 +1,9 @@
 package com.example.connectfour.websocket;
 
+import com.example.connectfour.game.type.PlayerColor;
 import java.io.IOException;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -14,11 +17,19 @@ import org.springframework.web.socket.WebSocketSession;
 class GameConnectionRegistry {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GameConnectionRegistry.class);
+    private static final int GAME_LOCK_COUNT = 64;
 
-    private final ConcurrentMap<UUID, WebSocketSession> activeConnections = new ConcurrentHashMap<>();
+    private final ConcurrentMap<PlayerConnection, WebSocketSession> activeConnections =
+            new ConcurrentHashMap<>();
+    private final Object[] gameLocks = createGameLocks();
 
-    void attach(UUID gameId, WebSocketSession session) {
-        WebSocketSession previous = activeConnections.put(gameId, session);
+    Object gameLock(UUID gameId) {
+        return gameLocks[Math.floorMod(gameId.hashCode(), gameLocks.length)];
+    }
+
+    void attach(UUID gameId, PlayerColor playerColor, WebSocketSession session) {
+        PlayerConnection key = new PlayerConnection(gameId, playerColor);
+        WebSocketSession previous = activeConnections.put(key, session);
         if (previous != null && previous != session && previous.isOpen()) {
             try {
                 previous.close(CloseStatus.NORMAL.withReason("Game resumed on another connection"));
@@ -28,11 +39,38 @@ class GameConnectionRegistry {
         }
     }
 
-    boolean isActive(UUID gameId, WebSocketSession session) {
-        return activeConnections.get(gameId) == session;
+    boolean isActive(UUID gameId, PlayerColor playerColor, WebSocketSession session) {
+        return activeConnections.get(new PlayerConnection(gameId, playerColor)) == session;
     }
 
-    void detach(UUID gameId, WebSocketSession session) {
-        activeConnections.remove(gameId, session);
+    boolean detach(UUID gameId, PlayerColor playerColor, WebSocketSession session) {
+        return activeConnections.remove(new PlayerConnection(gameId, playerColor), session);
     }
+
+    Map<PlayerColor, WebSocketSession> connections(UUID gameId) {
+        Map<PlayerColor, WebSocketSession> result = new EnumMap<>(PlayerColor.class);
+        activeConnections.forEach((key, session) -> {
+            if (key.gameId().equals(gameId)) {
+                result.put(key.playerColor(), session);
+            }
+        });
+        return Map.copyOf(result);
+    }
+
+    Map<PlayerColor, WebSocketSession> detachGame(UUID gameId) {
+        Map<PlayerColor, WebSocketSession> result = connections(gameId);
+        result.forEach((color, session) ->
+                activeConnections.remove(new PlayerConnection(gameId, color), session));
+        return result;
+    }
+
+    private Object[] createGameLocks() {
+        Object[] locks = new Object[GAME_LOCK_COUNT];
+        for (int index = 0; index < locks.length; index++) {
+            locks[index] = new Object();
+        }
+        return locks;
+    }
+
+    private record PlayerConnection(UUID gameId, PlayerColor playerColor) {}
 }

@@ -1,10 +1,10 @@
-package com.example.connectfour.game;
+package com.example.connectfour.game.error;
 
 public class GameException extends RuntimeException {
 
     private final GameErrorCode code;
 
-    GameException(GameErrorCode code, String message) {
+    public GameException(GameErrorCode code, String message) {
         super(message);
         this.code = code;
     }

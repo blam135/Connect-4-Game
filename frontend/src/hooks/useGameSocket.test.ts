@@ -1,19 +1,30 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installMockBrowserApis, MockWebSocket } from '../test/MockWebSocket'
-import type { ServerMessage } from '../types/protocol'
-import { GAME_ID_STORAGE_KEY, useGameSocket } from './useGameSocket'
+import type { GameState, ServerMessage } from '../types/protocol'
+import { GAME_SESSION_STORAGE_KEY, useGameSocket } from './useGameSocket'
 
-const gameState: Extract<ServerMessage, { type: 'GAME_STATE' }> = {
-  type: 'GAME_STATE',
-  payload: {
-    gameId: '6484817f-89d1-4518-874a-dba30795a481',
-    board: Array.from({ length: 6 }, () => Array(7).fill('EMPTY')),
-    status: 'IN_PROGRESS',
-    humanColor: 'RED',
-    firstPlayer: 'HUMAN',
-    computerColumn: null,
-  },
+const game: GameState = {
+  gameId: '6484817f-89d1-4518-874a-dba30795a481',
+  mode: 'ONLINE',
+  board: Array.from({ length: 6 }, () => Array(7).fill('EMPTY')),
+  status: 'IN_PROGRESS',
+  yourColor: 'RED',
+  startingColor: 'RED',
+  currentTurn: 'RED',
+  roomCode: 'ABC123',
+  opponentConnected: true,
+  computerColumn: null,
+}
+
+const credential = {
+  gameId: game.gameId,
+  playerToken: 'private-player-token',
+}
+
+const gameSession: Extract<ServerMessage, { type: 'GAME_SESSION' }> = {
+  type: 'GAME_SESSION',
+  payload: { playerToken: credential.playerToken, game },
 }
 
 describe('useGameSocket', () => {
@@ -38,64 +49,100 @@ describe('useGameSocket', () => {
     expect(result.current.connectionState).toBe('connected')
   })
 
-  it('resumes a stored game whenever a connection opens', () => {
-    window.localStorage.setItem(GAME_ID_STORAGE_KEY, gameState.payload.gameId)
+  it('resumes a stored game with both private credential fields', () => {
+    window.localStorage.setItem(
+      GAME_SESSION_STORAGE_KEY,
+      JSON.stringify(credential),
+    )
     renderHook(() => useGameSocket())
 
     const socket = MockWebSocket.instances[0]
     act(() => socket.open())
 
     expect(socket.send).toHaveBeenCalledWith(
-      JSON.stringify({
-        type: 'RESUME_GAME',
-        payload: { gameId: gameState.payload.gameId },
-      }),
+      JSON.stringify({ type: 'RESUME_GAME', payload: credential }),
     )
   })
 
-  it('stores snapshots and clears a game abandoned by the server', () => {
+  it('discards malformed stored credentials without sending a resume', () => {
+    window.localStorage.setItem(GAME_SESSION_STORAGE_KEY, '{broken')
+    renderHook(() => useGameSocket())
+
+    const socket = MockWebSocket.instances[0]
+    act(() => socket.open())
+
+    expect(socket.send).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBeNull()
+  })
+
+  it('stores credentials from a new session and accepts later snapshots', () => {
     const { result } = renderHook(() => useGameSocket())
     const socket = MockWebSocket.instances[0]
 
     act(() => {
       socket.open()
-      socket.receive(gameState)
+      socket.receive(gameSession)
     })
 
-    expect(result.current.game).toEqual(gameState.payload)
-    expect(window.localStorage.getItem(GAME_ID_STORAGE_KEY)).toBe(
-      gameState.payload.gameId,
+    expect(result.current.game).toEqual(game)
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBe(
+      JSON.stringify(credential),
     )
 
-    act(() =>
-      socket.receive({ type: 'GAME_ABANDONED', payload: {} }),
-    )
+    const opponentTurn: GameState = { ...game, currentTurn: 'YELLOW' }
+    act(() => socket.receive({ type: 'GAME_STATE', payload: opponentTurn }))
 
-    expect(result.current.game).toBeNull()
-    expect(window.localStorage.getItem(GAME_ID_STORAGE_KEY)).toBeNull()
+    expect(result.current.game).toEqual(opponentTurn)
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBe(
+      JSON.stringify(credential),
+    )
   })
 
-  it('clears a stale stored game when the backend cannot resume it', () => {
-    window.localStorage.setItem(GAME_ID_STORAGE_KEY, gameState.payload.gameId)
+  it('clears credentials when either player abandons the game', () => {
     const { result } = renderHook(() => useGameSocket())
     const socket = MockWebSocket.instances[0]
 
     act(() => {
       socket.open()
+      socket.receive(gameSession)
       socket.receive({
-        type: 'ERROR',
-        payload: {
-          code: 'GAME_NOT_FOUND',
-          message: 'Game does not exist',
-          recoverable: false,
-        },
+        type: 'GAME_ABANDONED',
+        payload: { reason: 'OPPONENT_LEFT' },
       })
     })
 
-    expect(window.localStorage.getItem(GAME_ID_STORAGE_KEY)).toBeNull()
     expect(result.current.game).toBeNull()
-    expect(result.current.error?.code).toBe('GAME_NOT_FOUND')
+    expect(result.current.error?.code).toBe('OPPONENT_LEFT')
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBeNull()
   })
+
+  it.each(['GAME_NOT_FOUND', 'INVALID_PLAYER_TOKEN'])(
+    'clears a stale stored game after %s',
+    (code) => {
+      window.localStorage.setItem(
+        GAME_SESSION_STORAGE_KEY,
+        JSON.stringify(credential),
+      )
+      const { result } = renderHook(() => useGameSocket())
+      const socket = MockWebSocket.instances[0]
+
+      act(() => {
+        socket.open()
+        socket.receive({
+          type: 'ERROR',
+          payload: {
+            code,
+            message: 'Could not restore the game',
+            recoverable: false,
+          },
+        })
+      })
+
+      expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBeNull()
+      expect(result.current.game).toBeNull()
+      expect(result.current.error?.code).toBe(code)
+    },
+  )
 
   it('retries unexpected disconnects with bounded exponential backoff', () => {
     vi.useFakeTimers()
@@ -119,14 +166,44 @@ describe('useGameSocket', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('resumes the current game after a temporary disconnect', () => {
+  it('waits for explicit reconnect when this session was replaced', () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useGameSocket())
+    const originalSocket = MockWebSocket.instances[0]
+
+    act(() => {
+      originalSocket.open()
+      originalSocket.receive(gameSession)
+      originalSocket.disconnect(1000, 'Game resumed on another connection')
+    })
+
+    expect(result.current.connectionState).toBe('disconnected')
+    expect(result.current.error?.code).toBe('SESSION_REPLACED')
+    expect(window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)).toBe(
+      JSON.stringify(credential),
+    )
+    expect(vi.getTimerCount()).toBe(0)
+
+    act(() => vi.advanceTimersByTime(10_000))
+    expect(MockWebSocket.instances).toHaveLength(1)
+
+    act(() => result.current.reconnect())
+    expect(MockWebSocket.instances).toHaveLength(2)
+    const replacementSocket = MockWebSocket.instances[1]
+    act(() => replacementSocket.open())
+    expect(replacementSocket.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'RESUME_GAME', payload: credential }),
+    )
+  })
+
+  it('resumes the current seat after a temporary disconnect', () => {
     vi.useFakeTimers()
     renderHook(() => useGameSocket())
 
     const originalSocket = MockWebSocket.instances[0]
     act(() => {
       originalSocket.open()
-      originalSocket.receive(gameState)
+      originalSocket.receive(gameSession)
       originalSocket.disconnect()
       vi.advanceTimersByTime(250)
     })
@@ -135,10 +212,7 @@ describe('useGameSocket', () => {
     act(() => reconnectedSocket.open())
 
     expect(reconnectedSocket.send).toHaveBeenCalledWith(
-      JSON.stringify({
-        type: 'RESUME_GAME',
-        payload: { gameId: gameState.payload.gameId },
-      }),
+      JSON.stringify({ type: 'RESUME_GAME', payload: credential }),
     )
   })
 
@@ -165,6 +239,44 @@ describe('useGameSocket', () => {
         },
       }),
     )
+    expect(result.current.isAwaitingResponse).toBe(false)
+  })
+
+  it('keeps a drop pending through presence snapshots until the board changes', () => {
+    const { result } = renderHook(() => useGameSocket())
+    const socket = MockWebSocket.instances[0]
+
+    act(() => {
+      socket.open()
+      socket.receive(gameSession)
+    })
+    act(() => {
+      result.current.sendMessage({
+        type: 'DROP_COUNTER',
+        payload: { column: 0 },
+      })
+    })
+
+    expect(result.current.isAwaitingResponse).toBe(true)
+
+    act(() =>
+      socket.receive({
+        type: 'GAME_STATE',
+        payload: { ...game, opponentConnected: false },
+      }),
+    )
+    expect(result.current.game?.opponentConnected).toBe(false)
+    expect(result.current.isAwaitingResponse).toBe(true)
+
+    const boardAfterMove = game.board.map((row) => [...row])
+    boardAfterMove[5][0] = 'RED'
+    act(() =>
+      socket.receive({
+        type: 'GAME_STATE',
+        payload: { ...game, board: boardAfterMove, currentTurn: 'YELLOW' },
+      }),
+    )
+    expect(result.current.game?.board).toEqual(boardAfterMove)
     expect(result.current.isAwaitingResponse).toBe(false)
   })
 })

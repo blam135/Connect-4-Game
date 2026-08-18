@@ -1,8 +1,10 @@
-# Backend structure and object-oriented design
+# Backend design
 
-This guide explains how the Spring Boot backend is divided, how its classes
-depend on each other, and which object-oriented patterns are present. For the
-system-wide protocol, runtime, and container views, see
+The Spring Boot backend separates WebSocket transport, game orchestration, and
+the preserved Connect Four algorithm. It supports both `COMPUTER` and `ONLINE`
+sessions without introducing a database.
+
+For the complete wire contract and runtime flows, see
 [Connect Four architecture](architecture.md).
 
 ## Package boundaries
@@ -10,288 +12,256 @@ system-wide protocol, runtime, and container views, see
 ```mermaid
 flowchart LR
     Boot["com.example.connectfour<br/>application bootstrap"]
-    Transport["websocket<br/>transport and connection ownership"]
-    Game["game<br/>application rules and server state"]
+    Transport["websocket<br/>protocol and socket ownership"]
+    GameService["game.service<br/>sessions, rooms, orchestration"]
+    GameModel["game.model<br/>access and snapshot records"]
+    GameType["game.type<br/>enums and cell values"]
+    GameError["game.error<br/>typed application failures"]
     Core["core<br/>Board and minimax Computer"]
     Legacy["legacy<br/>terminal runner"]
     Spring["Spring Boot and Jackson"]
 
-    Boot --> Transport
     Spring --> Boot
     Spring --> Transport
-    Transport --> Game
-    Game --> Core
+    Boot --> Transport
+    Transport --> GameService
+    Transport --> GameModel
+    Transport --> GameType
+    Transport --> GameError
+    GameService --> GameModel
+    GameService --> GameType
+    GameService --> GameError
+    GameService --> Core
     Legacy --> Core
 ```
 
-Dependencies point inward from delivery concerns toward the game algorithm:
+`websocket` depends on the `game` subpackages, while the game layer has no
+knowledge of JSON or WebSocket sessions. `game.service` owns orchestration and
+mutable session internals, `game.model` contains response records, `game.type`
+contains shared enums, and `game.error` contains typed failures. `core` contains
+no Spring or transport dependencies, so the original board and AI remain
+independently testable.
 
-- `websocket` knows about `game`, but `game` does not know about WebSockets or
-  JSON.
-- `game` knows about `core` because it orchestrates the preserved board and AI.
-- `core` has no Spring, transport, or application dependencies.
-- `legacy` is a separate terminal entry point. The server does not call it.
-
-This separation lets the game service be tested without starting Spring or a
-WebSocket server, while the original algorithm remains usable on its own.
-
-## Class dependency map
+## Main objects
 
 ```mermaid
 classDiagram
-    class WebSocketConfigurer {
-        <<interface>>
-    }
-    class TextWebSocketHandler {
-        <<framework>>
-    }
-    class JsonMapper {
-        <<bean>>
-    }
-    class WebSocketConfig {
-        <<configuration>>
-    }
-    class GameWebSocketHandler {
-        <<component>>
-    }
-    class GameConnectionRegistry {
-        <<component>>
-    }
-    class GameService {
-        <<service>>
-    }
-    class InMemoryGameRegistry {
-        <<component>>
-    }
-    class GameSession {
-        <<internal>>
-    }
-    class GameSnapshot {
-        <<record>>
-    }
-    class GameException
-    class GameErrorCode {
-        <<enumeration>>
-    }
-    class PlayerColor {
-        <<enumeration>>
-    }
-    class FirstPlayer {
-        <<enumeration>>
-    }
-    class GameStatus {
-        <<enumeration>>
-    }
-    class Cell {
-        <<enumeration>>
-    }
+    class WebSocketConfig
+    class GameWebSocketHandler
+    class GameConnectionRegistry
+    class GameService
+    class InMemoryGameRegistry
+    class GameSession
+    class GameAccess
+    class GameSnapshot
     class Board
     class Computer
 
-    WebSocketConfig ..|> WebSocketConfigurer : implements
-    GameWebSocketHandler --|> TextWebSocketHandler : extends
-    WebSocketConfig --> GameWebSocketHandler : registers
-    GameWebSocketHandler --> GameService : delegates
-    GameWebSocketHandler --> GameConnectionRegistry : owns active socket
-    GameWebSocketHandler --> JsonMapper : serializes protocol
-    GameService --> InMemoryGameRegistry : finds sessions
+    WebSocketConfig --> GameWebSocketHandler : registers /ws/game
+    GameWebSocketHandler --> GameConnectionRegistry : active seat sockets
+    GameWebSocketHandler --> GameService : delegates commands
+    GameService --> InMemoryGameRegistry : sessions and rooms
     InMemoryGameRegistry "1" o-- "0..*" GameSession : stores
-    GameSession *-- Board : owns mutable board
-    GameSession --> PlayerColor
-    GameSession --> FirstPlayer
-    GameSession --> GameStatus
-    GameService ..> Computer : creates and invokes
-    GameService ..> GameSnapshot : returns
-    GameSnapshot --> Cell : contains
-    GameException --> GameErrorCode : identifies
+    GameSession *-- Board : owns
+    GameService ..> Computer : evaluates and chooses
+    GameService ..> GameAccess : returns new credential
+    GameService ..> GameSnapshot : returns state
 ```
 
-The arrows describe source-level dependencies, not every runtime call. Protocol
-payload records are non-public nested types inside `GameWebSocketHandler`, so
-they do not become dependencies of the game layer.
+| Object | Responsibility |
+| --- | --- |
+| `WebSocketConfig` | Registers `/ws/game` and allowed origins |
+| `GameWebSocketHandler` | Parses commands, validates connection state, binds seats, broadcasts snapshots, and sends errors |
+| `GameConnectionRegistry` | Stores the latest socket for each `(gameId, playerColor)` and supplies striped game locks |
+| `GameService` | Creates games, claims rooms, authenticates resumes, applies moves, tracks presence, abandons sessions, and builds snapshots |
+| `InMemoryGameRegistry` | Maintains UUID-to-session and room-code-to-UUID concurrent maps |
+| `GameSession` | Owns one mutable board plus its mode, players, tokens, room, status, turn, and presence |
+| `GameAccess` | Returns a private `playerToken` with the first personalized snapshot |
+| `GameSnapshot` | Immutable transport-facing game state |
+| `Board` and `Computer` | Preserve stacking, position evaluation, and depth-4 minimax search |
 
-## How Spring constructs the application
+Spring constructs the configuration, handler, service, registries, and
+`JsonMapper` as singleton beans through constructor injection. Each
+`GameSession`, `Board`, `GameAccess`, and `GameSnapshot` is created per use case.
+`Computer` is created per calculation because it tracks traversal metrics and
+must not share mutable search state across games.
 
-`ConnectFourBackendApplication` starts component scanning from the root
-package. Spring creates the long-lived objects and satisfies their single
-constructors without requiring `@Autowired`:
+## Session model
 
-| Spring-managed object | Constructor dependencies | Role |
-| --- | --- | --- |
-| `WebSocketConfig` | `GameWebSocketHandler` | Registers `/ws/game` and allowed local origins |
-| `GameWebSocketHandler` | `GameService`, `GameConnectionRegistry`, `JsonMapper` | Parses, validates, dispatches, and serializes messages |
-| `GameService` | `InMemoryGameRegistry` | Runs application use cases and enforces game rules |
-| `InMemoryGameRegistry` | None | Stores game sessions by UUID |
-| `GameConnectionRegistry` | None | Stores the latest active socket by game UUID |
-| `JsonMapper` | Spring Boot auto-configuration | Converts JSON and Java records |
+A `GameSession` contains:
 
-These beans use Spring's default singleton scope. They contain either no
-mutable state or thread-safe registries designed to serve many games.
+- a UUID and `COMPUTER | ONLINE` mode;
+- the mutable core `Board`;
+- `startingColor`, `currentTurn`, and one of `WAITING_FOR_OPPONENT`,
+  `IN_PROGRESS`, `RED_WON`, `YELLOW_WON`, or `DRAW`;
+- a token for each occupied player-color seat;
+- connection presence for occupied seats;
+- an online room code, or the human color for a computer game.
 
-The following objects are deliberately **not** Spring beans:
+For online creation, the host chooses red or yellow. The room starts in
+`WAITING_FOR_OPPONENT`, its `startingColor` and `currentTurn` are red, and only
+the host seat exists. The first guest to submit the room code atomically claims
+the other color, receives a new token, and changes the status to `IN_PROGRESS`.
+Later join attempts receive `ROOM_FULL`.
 
-- one `GameSession` and one `Board` are created for each new game;
-- `GameSnapshot` values are created for responses and then discarded;
-- `Computer` is created for each AI or status calculation;
-- the handler's envelope and payload records exist only while processing JSON.
+Computer games have one human seat and no room code. `opponentConnected` is
+always true in their snapshots. `startingColor` reflects the chosen first
+player, while `currentTurn` represents when the human may submit the next move.
 
-Creating `Computer` per calculation is important because the preserved class
-tracks `nodesTraversed` internally. Sharing one singleton `Computer` would mix
-that mutable counter across concurrent games.
+## Registry and lifecycle
 
-## Request and dependency flow
+`InMemoryGameRegistry` uses two `ConcurrentHashMap` indexes:
 
-A command follows one direction through the layers:
+```text
+game UUID  -> GameSession
+room code  -> game UUID
+```
 
-1. `WebSocketConfig` routes `/ws/game` traffic to `GameWebSocketHandler`.
-2. `GameWebSocketHandler` converts JSON into a command record and validates
-   connection-level rules.
-3. `GameConnectionRegistry` confirms that the socket is authoritative for its
-   game.
-4. `GameService` performs `startGame`, `resumeGame`, `dropCounter`, or
-   `abandonGame`.
-5. `InMemoryGameRegistry` locates the package-private `GameSession`.
-6. `GameService` mutates `Board`, invokes `Computer`, and updates `GameStatus`.
-7. `GameService` returns an immutable `GameSnapshot` in API row order.
-8. `GameWebSocketHandler` wraps the snapshot in a server envelope and
-   serializes it back to JSON.
+Online registration reserves a generated six-character code with
+`putIfAbsent`; a collision triggers generation of another code. The alphabet
+omits ambiguous characters. Server room lookup trims and uppercases input.
 
-Errors travel outward in the opposite direction. `GameService` throws a
-`GameException` carrying a `GameErrorCode`; the handler translates it into the
-transport-level `ERROR` envelope and decides whether the failure is
-recoverable. Unexpected exceptions are logged and reduced to `INTERNAL_ERROR`
-so implementation details are not exposed.
+An explicit `ABANDON_GAME` conditionally removes the same session instance from
+the UUID index and removes its room-code index entry. The handler then detaches
+all current sockets and sends `GAME_ABANDONED`: `YOU_LEFT` to the caller and
+`OPPONENT_LEFT` to the other player. An unexpected socket close does not remove
+the session; it only updates that seat's presence.
 
-## The domain object boundary
+All sessions, room codes, and tokens are process-local. A restart loses them,
+and there is no database, account service, matchmaking service, or match
+history.
 
-`GameSession` acts as the internal owner of one game:
+## Command handling
 
-- its UUID, board, human color, and first player are fixed after construction;
-- its status and board contents are mutable;
-- it is package-private, so transport code cannot mutate it directly;
-- `GameService` is the only production class that coordinates its changes.
+The transport accepts these commands:
 
-The object is also the per-game monitor lock. `resumeGame`, `dropCounter`, and
-`abandonGame` synchronize on the session instance. A human move, the AI search,
-the AI move, and the resulting status update therefore form one atomic turn.
-Different sessions can still progress concurrently.
+- `START_GAME {humanColor, firstPlayer}`
+- `CREATE_ONLINE_GAME {hostColor}`
+- `JOIN_ONLINE_GAME {roomCode}`
+- `RESUME_GAME {gameId, playerToken}`
+- `DROP_COUNTER {column}`
+- `ABANDON_GAME {}`
 
-`GameSnapshot` is the boundary value returned to callers. It is a Java record,
-and its compact constructor copies the outer board and every row. This prevents
-callers from mutating the server's board through a response object.
+Starting or claiming a seat returns `GAME_SESSION {playerToken, game}`. Resuming
+authenticates the token against the requested game and returns `GAME_STATE`.
+Only the token's color is bound to the new socket; knowing a UUID or room code
+alone cannot resume an occupied seat.
 
-The core `Board` provides the other defensive boundary: `getBoard()` returns a
-new array and `getCopy()` creates an independent board for minimax branches.
+`DROP_COUNTER` first checks that the socket is still the active connection for
+its bound seat. `GameService` then verifies the seat, column, game status,
+online presence, and turn before mutating the board.
 
-## Object-oriented patterns in use
+For online play, one accepted command places exactly one counter, updates the
+result, changes `currentTurn` to the opponent when play continues, and causes
+personalized `GAME_STATE` snapshots to be broadcast to both seats. Red always
+starts.
 
-### Layered architecture
+For computer play, one accepted human command may place both the human and AI
+counters. The AI runs only if the human move was not terminal; the combined
+turn is returned as one snapshot with `computerColumn` identifying the AI
+counter for the client animation.
 
-Transport, application rules, and the core algorithm live in separate
-packages. Each layer has a narrower reason to change, and dependencies do not
-point back toward the WebSocket layer.
+## Presence, reconnection, and socket replacement
 
-### Dependency injection and inversion of control
+`GameConnectionRegistry` keys connections by both game UUID and player color.
+This lets an online game retain two active sockets. Attaching a new socket for
+one seat atomically replaces and closes only that seat's previous socket with
+the reason `Game resumed on another connection`.
 
-Spring constructs infrastructure and application services through constructor
-injection. Classes declare what they need, while the framework controls object
-creation and startup order. The single constructors also make manual unit-test
-construction straightforward.
+On a genuine active-socket disconnect, the handler:
 
-This is dependency injection, but not complete dependency inversion:
-`GameService` intentionally depends on the concrete `InMemoryGameRegistry` and
-creates concrete `Computer` instances because the application currently has
-only one storage mechanism and one AI implementation.
+1. removes the mapping only if it still points to the closing socket;
+2. marks that color disconnected in the session;
+3. broadcasts a personalized snapshot to the remaining connection.
 
-### Service Layer
+The compare-and-remove step prevents a replaced socket's later close callback
+from marking the newly resumed seat offline. A valid resume attaches the new
+socket, marks the seat connected, returns its state, and broadcasts restored
+presence to the opponent.
 
-`GameService` is an application service. It exposes the four backend use cases
-and coordinates validation, persistence, the domain object, the AI, and result
-mapping. The WebSocket handler does not duplicate these rules.
+Presence does not change `GameStatus`. Online controls are effectively paused
+because `GameService` rejects a move unless both seats exist and both are
+connected. The existing board and `currentTurn` remain available indefinitely
+until resume, explicit abandonment, or server restart.
 
-### Registry, with repository-like behavior
+## Concurrency
 
-`InMemoryGameRegistry` encapsulates the concurrent UUID-to-session map behind
-`register`, `find`, and conditional `remove` operations. It resembles the
-Repository pattern, but `Registry` is the more accurate current name: there is
-no persistence abstraction, query language, or alternate implementation.
+The handler obtains one of 64 deterministic striped locks for each game UUID.
+Within that lock it coordinates connection changes, service calls, broadcasts,
+and abandonment. Hash collisions can serialize unrelated games but do not mix
+their state.
 
-`GameConnectionRegistry` applies the same idea to transport ownership. Its
-`attach` operation replaces and closes the previous socket, making “latest
-resume wins” one cohesive behavior rather than scattered handler logic.
+`GameService` additionally synchronizes on the `GameSession` before reading or
+mutating domain state. This makes seat claiming, presence changes, turns,
+terminal-state updates, and removal checks atomic for a session. The complete
+human-plus-AI turn stays under this monitor. WebSocket writes are synchronized
+on the receiving `WebSocketSession`.
 
-### Aggregate-like session boundary
+These guarantees do not cross process boundaries. Horizontal scaling would
+need shared persistence, distributed locking or atomic commands, shared
+pub/sub, and connection routing.
 
-`GameSession` is similar to a small aggregate root: it groups the identity,
-configuration, board, and status that must change consistently. Package
-visibility prevents external layers from reaching through the service to
-modify it. This project does not otherwise implement full Domain-Driven Design.
+## Snapshot boundary
 
-### Immutable DTO and value objects
+The core board stores row zero at the bottom and uses `.`, `r`, and `y`.
+`GameService` reverses rows and maps tokens to `EMPTY`, `RED`, and `YELLOW` for
+the API. `GameSnapshot` copies the outer board list and every row, preventing a
+caller from modifying server state through a response.
 
-`GameSnapshot` is an immutable data-transfer value. `PlayerColor`,
-`FirstPlayer`, `GameStatus`, `Cell`, and `GameErrorCode` are enums that constrain
-valid values and avoid loosely typed strings inside the application layer.
+Every online recipient gets a separate snapshot so `yourColor` and
+`opponentConnected` are correct for that seat. `currentTurn` becomes null after
+a win or draw; `computerColumn` is null outside an AI response.
 
-The handler's nested records are transport DTOs. Keeping them non-public
-prevents wire-format details from leaking into domain classes.
+## Error translation
 
-### Boundary adapter
+Expected application failures are `GameException` values with stable codes:
 
-`GameWebSocketHandler` adapts raw WebSocket JSON to application method calls.
-`GameService.snapshot` adapts the legacy core board—bottom row first with
-character tokens—to the API board—top row first with `Cell` values. This keeps
-the unusual core representation from spreading into the frontend or transport
-code.
+- `GAME_NOT_FOUND`, `ROOM_NOT_FOUND`, `ROOM_FULL`, and
+  `INVALID_PLAYER_TOKEN` for lookup and seat access;
+- `NOT_YOUR_TURN` and `OPPONENT_OFFLINE` for online coordination;
+- `INVALID_CONFIGURATION`, `INVALID_COLUMN`, `COLUMN_FULL`, and
+  `GAME_FINISHED` for game validation.
 
-### Template Method through the framework
+The handler wraps these as `ERROR {code, message, recoverable}`. It also owns
+transport codes such as `NO_ACTIVE_GAME`, `CONNECTION_ALREADY_BOUND`, and
+`STALE_CONNECTION`. Unexpected exceptions are logged and exposed only as
+`INTERNAL_ERROR`.
 
-`GameWebSocketHandler` extends Spring's `TextWebSocketHandler` and overrides
-framework callbacks such as `handleTextMessage` and `afterConnectionClosed`.
-Spring owns the surrounding WebSocket lifecycle and calls those extension
-points. `WebSocketConfig` similarly implements the framework's
-`WebSocketConfigurer` callback interface.
+## Design patterns and intentional limits
 
-### Exception translation
+- **Layered architecture:** WebSocket delivery depends inward on application
+  rules and the core algorithm.
+- **Service layer:** `GameService` coordinates use cases without transport
+  concerns.
+- **Registry:** the two registries encapsulate process-local game lookup and
+  live socket ownership.
+- **Aggregate-like boundary:** package-private `GameSession` groups state that
+  must change consistently.
+- **Immutable DTOs:** records and enums constrain the boundary values.
+- **Boundary adapter:** the handler maps JSON to service calls, while snapshot
+  conversion isolates the legacy board representation.
+- **Exception translation:** typed service failures become stable wire errors.
 
-The game layer reports typed domain/application failures with `GameException`.
-The handler catches those exceptions and translates them into stable protocol
-errors. This prevents JSON and recoverability concerns from entering
-`GameService`.
+There is deliberately no repository interface, durable store, event bus, CQRS,
+AI strategy interface, or session factory. Those abstractions should be added
+only when a second implementation or persistence requirement exists.
 
-## Patterns intentionally not introduced
+## Tests and change locations
 
-- There is no `GameRegistry` interface because only one in-memory
-  implementation exists. An interface becomes useful when durable storage is
-  actually added.
-- There is no AI Strategy interface because only the preserved minimax player
-  exists. `Computer` is a direct collaborator, not a pluggable strategy today.
-- There is no separate factory for `GameSession`; construction is short and
-  belongs to the `startGame` use case.
-- There is no event bus, CQRS model, or event sourcing. Commands mutate one
-  in-memory session and return its latest snapshot.
-- Spring's default bean scope is singleton, but the code does not implement the
-  GoF Singleton pattern or use global static instances.
-
-Avoiding these abstractions keeps the learning application small. They should
-be introduced only when a second implementation or new lifecycle requirement
-creates a concrete seam.
-
-## Where changes belong
+| Test area | Coverage |
+| --- | --- |
+| `BoardTest`, `ComputerTest` | Preserved stacking, copying, evaluation, and minimax behavior |
+| `GameServiceTest` | Computer regressions, room lifecycle, seat assignment, turns, wins/draws, presence, tokens, and cleanup |
+| `GameWebSocketIntegrationTest` | Two-client broadcasts, authorization, reconnect/replacement, disconnect pause, abandonment, and errors |
 
 | Change | Primary location |
 | --- | --- |
-| WebSocket message or connection rule | `websocket/GameWebSocketHandler` |
-| Endpoint registration or allowed origin | `websocket/WebSocketConfig` |
-| Resume socket ownership | `websocket/GameConnectionRegistry` |
-| Game validation or turn orchestration | `game/GameService` |
-| Server game storage | `game/InMemoryGameRegistry` |
-| Game state carried across a turn | `game/GameSession` |
-| API snapshot shape | `game/GameSnapshot` and frontend protocol types |
-| Counter stacking or board copying | `core/Board` |
-| Minimax scoring or search | `core/Computer` |
-
-The existing tests follow the same boundaries: `BoardTest` and `ComputerTest`
-characterize the preserved core, `GameServiceTest` exercises application rules
-with manually constructed dependencies, and `GameWebSocketIntegrationTest`
-tests the complete transport path through a running Spring context.
+| Wire message or connection lifecycle | `websocket/GameWebSocketHandler` |
+| Active seat socket or game lock | `websocket/GameConnectionRegistry` |
+| Room, turn, token, presence, or AI orchestration | `game/service/GameService` |
+| Session and room indexes | `game/service/InMemoryGameRegistry` |
+| Per-game mutable state | `game/service/GameSession` |
+| Snapshot fields | `game/model/GameSnapshot` and frontend protocol types |
+| Shared game enums and cell values | `game/type` |
+| Stable service errors | `game/error` |
+| Counter stacking or minimax | `core/Board` and `core/Computer` |

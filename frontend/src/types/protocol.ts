@@ -2,20 +2,27 @@ export type PlayerColor = 'RED' | 'YELLOW'
 
 export type FirstPlayer = 'HUMAN' | 'COMPUTER'
 
+export type GameMode = 'COMPUTER' | 'ONLINE'
+
 export type Cell = 'EMPTY' | PlayerColor
 
 export type GameStatus =
+  | 'WAITING_FOR_OPPONENT'
   | 'IN_PROGRESS'
-  | 'HUMAN_WON'
-  | 'COMPUTER_WON'
+  | 'RED_WON'
+  | 'YELLOW_WON'
   | 'DRAW'
 
 export type GameState = {
   gameId: string
+  mode: GameMode
   board: Cell[][]
   status: GameStatus
-  humanColor: PlayerColor
-  firstPlayer: FirstPlayer
+  yourColor: PlayerColor
+  startingColor: PlayerColor
+  currentTurn: PlayerColor | null
+  roomCode: string | null
+  opponentConnected: boolean
   computerColumn: number | null
 }
 
@@ -34,8 +41,16 @@ export type ClientMessage =
       }
     }
   | {
+      type: 'CREATE_ONLINE_GAME'
+      payload: { hostColor: PlayerColor }
+    }
+  | {
+      type: 'JOIN_ONLINE_GAME'
+      payload: { roomCode: string }
+    }
+  | {
       type: 'RESUME_GAME'
-      payload: { gameId: string }
+      payload: { gameId: string; playerToken: string }
     }
   | {
       type: 'DROP_COUNTER'
@@ -48,12 +63,19 @@ export type ClientMessage =
 
 export type ServerMessage =
   | {
+      type: 'GAME_SESSION'
+      payload: {
+        playerToken: string
+        game: GameState
+      }
+    }
+  | {
       type: 'GAME_STATE'
       payload: GameState
     }
   | {
       type: 'GAME_ABANDONED'
-      payload: Record<string, never>
+      payload: { reason: 'YOU_LEFT' | 'OPPONENT_LEFT' }
     }
   | {
       type: 'ERROR'

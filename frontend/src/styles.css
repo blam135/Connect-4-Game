@@ -35,6 +35,7 @@ button {
 
 button:focus-visible,
 input:focus-visible + .choice-content,
+.room-code-field input:focus-visible,
 a:focus-visible {
   outline: 3px solid #7c9fff;
   outline-offset: 3px;
@@ -349,6 +350,41 @@ fieldset:disabled .choice-card:hover .choice-content {
   white-space: nowrap;
 }
 
+.room-code-field {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1.5rem;
+}
+
+.room-code-field label {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.room-code-field input {
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #d8dce5;
+  border-radius: 0.85rem;
+  background: white;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.room-code-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.room-code-field small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .primary-button,
 .secondary-button {
   display: inline-flex;
@@ -423,6 +459,59 @@ fieldset:disabled .choice-card:hover .choice-content {
   display: inline-flex;
   gap: 0.45rem;
   align-items: center;
+}
+
+.waiting-room {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem 1.5rem;
+  align-items: center;
+  width: min(100%, 42rem);
+  margin: 0 auto 1.5rem;
+  padding: 1.2rem;
+  border: 1px solid #cad7f8;
+  border-radius: 1rem;
+  background: #eef3ff;
+}
+
+.waiting-room h2,
+.waiting-room p {
+  margin: 0;
+}
+
+.waiting-room .eyebrow {
+  margin-bottom: 0.2rem;
+}
+
+.waiting-room h2 {
+  font-size: 1rem;
+}
+
+.waiting-room > div > p:last-child {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.room-code {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  letter-spacing: 0.18em;
+}
+
+.copy-feedback {
+  grid-column: 1 / -1;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.copy-feedback.success {
+  color: #21734a;
+}
+
+.copy-feedback.failure {
+  color: #a32338;
 }
 
 .mini-counter {
@@ -597,14 +686,10 @@ fieldset:disabled .choice-card:hover .choice-content {
   text-transform: uppercase;
 }
 
-.game-status.human_won {
+.game-status.red_won,
+.game-status.yellow_won {
   border-color: #9cd9b9;
   background: #effbf4;
-}
-
-.game-status.computer_won {
-  border-color: #f4bdc5;
-  background: #fff2f4;
 }
 
 .spinner {
@@ -675,6 +760,18 @@ fieldset:disabled .choice-card:hover .choice-content {
   .player-summary {
     display: grid;
     gap: 0.35rem;
+  }
+
+  .waiting-room {
+    grid-template-columns: 1fr;
+  }
+
+  .waiting-room .secondary-button {
+    width: 100%;
+  }
+
+  .copy-feedback {
+    grid-column: auto;
   }
 
   .column-controls {

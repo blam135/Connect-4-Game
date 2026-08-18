@@ -1,11 +1,11 @@
-package com.example.connectfour.game;
+package com.example.connectfour.game.type;
 
 public enum Cell {
     EMPTY,
     RED,
     YELLOW;
 
-    static Cell fromCoreToken(char token) {
+    public static Cell fromCoreToken(char token) {
         return switch (token) {
             case '.' -> EMPTY;
             case 'r' -> RED;

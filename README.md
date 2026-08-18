@@ -1,33 +1,76 @@
 # Connect Four
 
-A local full-stack Connect Four game with a React client, a raw WebSocket
-protocol, and a Spring Boot backend that preserves the original Java minimax
-opponent.
+A full-stack Connect Four game with two ways to play:
+
+- challenge the preserved depth-4 minimax computer; or
+- create an online room and play live with another person in a second browser.
+
+The React client communicates with a Spring Boot server through a raw JSON
+WebSocket protocol. The backend is authoritative for the board, turns, player
+seats, connection presence, and results.
+
+## Run locally
+
+Prerequisites: Java 21 and Node.js 24 or newer.
+
+Start the backend:
+
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+
+Start the frontend in another terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`. Vite proxies `/ws/game` to Spring Boot on port
+`8080`.
+
+To test online play:
+
+1. In one browser, choose **Play online**, **Create a room**, and a color.
+2. Copy the invite link or note the six-character room code.
+3. Open the link in a different browser, browser profile, or private window so
+   each player has separate `localStorage`, then join the room.
+4. Red moves first. Closing either connection pauses play until that player
+   reconnects; choosing **Leave game** ends the room for both players.
+
+Alternatively, run both applications with Docker:
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:3000` in two separate browser storage contexts.
+
+## Architecture and limitations
+
+Rooms, boards, player tokens, and connection presence live only in the single
+backend process. There is no database, account system, matchmaking, chat, or
+durable match history. Games disappear when the service sleeps, restarts, or
+is redeployed.
 
 Documentation:
 
-- [Application architecture](docs/architecture.md) — system diagrams, state
-  ownership, failure behavior, and startup instructions.
-- [Backend structure and object-oriented design](docs/backend-design.md) —
-  class dependencies, Spring object construction, and design patterns.
-- [Frontend structure and React design](docs/frontend-design.md) — React and
-  DOM concepts, component data flow, state, hooks, styling, and testing.
-- [Cloud deployment](docs/cloud-deployment.md) — production image construction,
-  Render runtime behavior, configuration, and request routing.
+- [Application architecture](docs/architecture.md) — protocol, state ownership,
+  gameplay, reconnection, failures, and local testing.
+- [Backend design](docs/backend-design.md) — game sessions, room registry,
+  concurrency, WebSocket connections, and minimax integration.
+- [Frontend design](docs/frontend-design.md) — UI modes, hook lifecycle,
+  session storage, input policy, accessibility, and tests.
+- [Spring configuration](docs/spring-configuration.md) — ports, origins, and
+  environment variables.
+- [Cloud deployment](docs/cloud-deployment.md) — production image construction
+  and Render runtime behavior.
 
 ## Deploy to Render
 
-> [!NOTE]
-> The files in `infra/` are intended for cloud deployment.
-> For local development with separate frontend and backend containers, use
-> `compose.yaml` instead.
-
-The repository includes a Render Blueprint that deploys the frontend and
-backend together as one free Web Service. The production Docker image builds
-the React client, packages it into Spring Boot, and serves the website and
-WebSocket endpoint from the same public URL.
-
-Render will provide an HTTPS `onrender.com` URL and will redeploy whenever a
-commit is pushed to the connected branch. Free services sleep after periods of
-inactivity, so the first visit after a sleep can take longer to load. Active
-games are stored in memory and are lost whenever the service sleeps or restarts.
+The Render Blueprint in `infra/render.yaml` deploys the frontend and backend as
+one Web Service. Spring serves the built React assets and `/ws/game` from the
+same public origin. Free services can sleep after inactivity, so the first
+request may be delayed and every in-memory game is lost when the process stops.

@@ -115,8 +115,9 @@ traffic or WebSocket messages. The next request starts it again and can take
 about a minute to receive a response. Its filesystem is ephemeral, so files
 created at runtime are lost on sleep, restart, and redeployment.
 
-Game sessions currently live in backend memory. They are therefore also lost
-whenever the process stops. Browser `localStorage` retains only a game ID; it
+Game sessions, online room codes, player tokens, and connection presence live
+in backend memory. They are therefore lost whenever the process stops. Browser
+`localStorage` retains only the `{gameId, playerToken}` resume credential; it
 cannot restore a game that no longer exists on the server.
 
 If persistent data is added later, it should use a managed database connected
@@ -132,6 +133,11 @@ One service is a deliberate fit for this side project:
 - frontend and backend versions are deployed together;
 - HTTP and WebSocket traffic share one origin;
 - no production reverse-proxy container or cross-service URL is required.
+
+It also matches the current process-local room model: both online players must
+reach the same backend instance for broadcasts, reconnect presence, and turn
+coordination. Horizontal scaling would require shared game persistence and
+cross-instance messaging in addition to deployment changes.
 
 The trade-off is coupled deployment and scaling: even a frontend-only change
 rebuilds the complete image. If those concerns become important, the frontend

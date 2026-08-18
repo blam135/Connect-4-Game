@@ -1,4 +1,4 @@
-package com.example.connectfour.game;
+package com.example.connectfour.game.type;
 
 public enum PlayerColor {
     RED('r'),
@@ -10,11 +10,11 @@ public enum PlayerColor {
         this.coreToken = coreToken;
     }
 
-    char coreToken() {
+    public char coreToken() {
         return coreToken;
     }
 
-    PlayerColor opponent() {
+    public PlayerColor opponent() {
         return this == RED ? YELLOW : RED;
     }
 }
