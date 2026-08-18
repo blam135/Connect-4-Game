@@ -13,11 +13,18 @@ seats, connection presence, and results.
 
 Prerequisites: Java 21 and Node.js 24 or newer.
 
+The backend `Makefile` provides shortcuts for its common development commands:
+
+```bash
+cd backend
+make help
+```
+
 Start the backend:
 
 ```bash
 cd backend
-./mvnw spring-boot:run
+make run
 ```
 
 Start the frontend in another terminal:
@@ -47,6 +54,13 @@ docker compose up --build
 ```
 
 Then open `http://localhost:3000` in two separate browser storage contexts.
+
+Run the preserved terminal game independently of Spring Boot with:
+
+```bash
+cd backend
+make cli
+```
 
 ## Architecture and limitations
 
