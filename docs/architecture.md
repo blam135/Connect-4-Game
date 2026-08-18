@@ -8,6 +8,7 @@ Deeper implementation guides:
 
 - [Backend structure and object-oriented design](backend-design.md)
 - [Frontend structure and React design](frontend-design.md)
+- [Spring Boot configuration and environment variables](spring-configuration.md)
 
 ## System context
 
