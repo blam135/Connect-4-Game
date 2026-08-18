@@ -2,8 +2,9 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { installMockBrowserApis, MockWebSocket } from './test/MockWebSocket'
-import type { Cell, GameState, ServerMessage } from './types/protocol'
+import { installMockBrowserApis, MockWebSocket } from '../test/MockWebSocket'
+import type { Cell, GameState } from '../domain/game'
+import type { ServerMessage } from '../services/game-session/protocol'
 
 function boardWith(...counters: Array<[number, number, Cell]>) {
   const board: Cell[][] = Array.from({ length: 6 }, () =>

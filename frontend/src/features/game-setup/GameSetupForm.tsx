@@ -1,47 +1,33 @@
 import type { FormEvent } from 'react'
-import type { FirstPlayer, PlayerColor } from '../types/protocol'
+import type { StartGameIntent } from '../../services/game-session/gameSession.types'
+import type { GameSetupDraft } from './gameSetup.model'
+import { setupIntent } from './gameSetup.model'
+import { normalizeRoomCode } from './gameSetup.utils'
+import './gameSetup.css'
 
-export type SetupMode = 'COMPUTER' | 'ONLINE'
-export type OnlineAction = 'CREATE' | 'JOIN'
-
-type GameSetupProps = {
-  mode: SetupMode
-  onlineAction: OnlineAction
-  playerColor: PlayerColor
-  firstPlayer: FirstPlayer
-  roomCode: string
+type GameSetupFormProps = {
+  value: GameSetupDraft
   disabled: boolean
   isStarting: boolean
-  onModeChange: (mode: SetupMode) => void
-  onOnlineActionChange: (action: OnlineAction) => void
-  onPlayerColorChange: (color: PlayerColor) => void
-  onFirstPlayerChange: (firstPlayer: FirstPlayer) => void
-  onRoomCodeChange: (roomCode: string) => void
-  onStart: () => void
+  onChange: (update: Partial<GameSetupDraft>) => void
+  onSubmit: (intent: StartGameIntent) => void
 }
 
-function GameSetup({
-  mode,
-  onlineAction,
-  playerColor,
-  firstPlayer,
-  roomCode,
+function GameSetupForm({
+  value,
   disabled,
   isStarting,
-  onModeChange,
-  onOnlineActionChange,
-  onPlayerColorChange,
-  onFirstPlayerChange,
-  onRoomCodeChange,
-  onStart,
-}: GameSetupProps) {
+  onChange,
+  onSubmit,
+}: GameSetupFormProps) {
+  const { mode, onlineAction, playerColor, firstPlayer, roomCode } = value
   const isJoin = mode === 'ONLINE' && onlineAction === 'JOIN'
   const submitDisabled = disabled || (isJoin && roomCode.length !== 6)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!submitDisabled) {
-      onStart()
+      onSubmit(setupIntent(value))
     }
   }
 
@@ -92,14 +78,14 @@ function GameSetup({
             {([
               ['COMPUTER', 'Play computer', 'Challenge the AI'],
               ['ONLINE', 'Play online', 'Invite a friend'],
-            ] as const).map(([value, title, description]) => (
-              <label className="choice-card" key={value}>
+            ] as const).map(([option, title, description]) => (
+              <label className="choice-card" key={option}>
                 <input
                   type="radio"
                   name="game-mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => onModeChange(value)}
+                  value={option}
+                  checked={mode === option}
+                  onChange={() => onChange({ mode: option })}
                 />
                 <span className="choice-content text-choice">
                   <strong>{title}</strong>
@@ -117,14 +103,14 @@ function GameSetup({
               {([
                 ['CREATE', 'Create a room', 'Share your invite code'],
                 ['JOIN', 'Join a room', 'Enter a friend’s code'],
-              ] as const).map(([value, title, description]) => (
-                <label className="choice-card" key={value}>
+              ] as const).map(([option, title, description]) => (
+                <label className="choice-card" key={option}>
                   <input
                     type="radio"
                     name="online-action"
-                    value={value}
-                    checked={onlineAction === value}
-                    onChange={() => onOnlineActionChange(value)}
+                    value={option}
+                    checked={onlineAction === option}
+                    onChange={() => onChange({ onlineAction: option })}
                   />
                   <span className="choice-content text-choice">
                     <strong>{title}</strong>
@@ -147,7 +133,7 @@ function GameSetup({
                     name="player-color"
                     value={color}
                     checked={playerColor === color}
-                    onChange={() => onPlayerColorChange(color)}
+                    onChange={() => onChange({ playerColor: color })}
                   />
                   <span className={`choice-content ${color.toLowerCase()}`}>
                     <i className="counter-preview" aria-hidden="true" />
@@ -166,14 +152,14 @@ function GameSetup({
               {([
                 ['HUMAN', 'I do', 'Take the opening move'],
                 ['COMPUTER', 'Computer', 'Let the AI set the board'],
-              ] as const).map(([value, title, description]) => (
-                <label className="choice-card" key={value}>
+              ] as const).map(([option, title, description]) => (
+                <label className="choice-card" key={option}>
                   <input
                     type="radio"
                     name="first-player"
-                    value={value}
-                    checked={firstPlayer === value}
-                    onChange={() => onFirstPlayerChange(value)}
+                    value={option}
+                    checked={firstPlayer === option}
+                    onChange={() => onChange({ firstPlayer: option })}
                   />
                   <span className="choice-content text-choice">
                     <strong>{title}</strong>
@@ -197,7 +183,9 @@ function GameSetup({
               spellCheck={false}
               placeholder="ABC123"
               disabled={disabled}
-              onChange={(event) => onRoomCodeChange(event.target.value)}
+              onChange={(event) =>
+                onChange({ roomCode: normalizeRoomCode(event.target.value) })
+              }
             />
             <small>Enter the six-character code your friend shared.</small>
           </div>
@@ -212,4 +200,4 @@ function GameSetup({
   )
 }
 
-export default GameSetup
+export default GameSetupForm

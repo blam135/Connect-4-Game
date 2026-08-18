@@ -1,8 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installMockBrowserApis, MockWebSocket } from '../test/MockWebSocket'
-import type { GameState, ServerMessage } from '../types/protocol'
-import { GAME_SESSION_STORAGE_KEY, useGameSocket } from './useGameSocket'
+import { installMockBrowserApis, MockWebSocket } from '../../test/MockWebSocket'
+import type { GameState } from '../../domain/game'
+import type { ServerMessage } from './protocol'
+import { GAME_SESSION_STORAGE_KEY } from './sessionStorage'
+import { useGameSocket } from './useGameSocket'
 
 const game: GameState = {
   gameId: '6484817f-89d1-4518-874a-dba30795a481',

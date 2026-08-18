@@ -1,26 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type {
-  Cell,
-  ClientMessage,
-  GameError,
-  GameState,
-  ServerMessage,
-} from '../types/protocol'
-
-export const GAME_SESSION_STORAGE_KEY = 'connect-four.game-session'
-const LEGACY_GAME_ID_STORAGE_KEY = 'connect-four.game-id'
+import type { GameState } from '../../domain/game'
+import { acknowledgesPendingCommand } from './pendingCommand'
+import type { PendingCommand } from './pendingCommand'
+import type { ClientMessage, GameError } from './protocol'
+import { invalidServerMessage, parseServerMessage } from './protocol.parsers'
+import {
+  clearStoredSession,
+  readStoredSession,
+  storeGameSession,
+} from './sessionStorage'
 
 const MAX_RECONNECT_ATTEMPTS = 4
 const INITIAL_RECONNECT_DELAY_MS = 250
-
-type StoredGameSession = {
-  gameId: string
-  playerToken: string
-}
-
-type PendingCommand =
-  | { type: 'DROP_COUNTER'; board: Cell[][] }
-  | { type: Exclude<ClientMessage['type'], 'DROP_COUNTER'> }
 
 export type ConnectionState =
   | 'connecting'
@@ -41,114 +32,6 @@ export type GameSocket = {
 function gameSocketUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${window.location.host}/ws/game`
-}
-
-function invalidServerMessage(): GameError {
-  return {
-    code: 'INVALID_SERVER_MESSAGE',
-    message: 'The server returned an invalid message',
-    recoverable: false,
-  }
-}
-
-function parseServerMessage(data: unknown): ServerMessage | null {
-  if (typeof data !== 'string') {
-    return null
-  }
-
-  try {
-    const message: unknown = JSON.parse(data)
-    if (
-      typeof message !== 'object' ||
-      message === null ||
-      !('type' in message) ||
-      !('payload' in message) ||
-      (message.type !== 'GAME_SESSION' &&
-        message.type !== 'GAME_STATE' &&
-        message.type !== 'GAME_ABANDONED' &&
-        message.type !== 'ERROR')
-    ) {
-      return null
-    }
-
-    return message as ServerMessage
-  } catch {
-    return null
-  }
-}
-
-function clearStoredSession() {
-  window.localStorage.removeItem(GAME_SESSION_STORAGE_KEY)
-  window.localStorage.removeItem(LEGACY_GAME_ID_STORAGE_KEY)
-}
-
-function readStoredSession(): StoredGameSession | null {
-  window.localStorage.removeItem(LEGACY_GAME_ID_STORAGE_KEY)
-  const rawSession = window.localStorage.getItem(GAME_SESSION_STORAGE_KEY)
-  if (rawSession === null) {
-    return null
-  }
-
-  try {
-    const session: unknown = JSON.parse(rawSession)
-    if (
-      typeof session !== 'object' ||
-      session === null ||
-      !('gameId' in session) ||
-      !('playerToken' in session) ||
-      typeof session.gameId !== 'string' ||
-      session.gameId.length === 0 ||
-      typeof session.playerToken !== 'string' ||
-      session.playerToken.length === 0
-    ) {
-      clearStoredSession()
-      return null
-    }
-
-    return {
-      gameId: session.gameId,
-      playerToken: session.playerToken,
-    }
-  } catch {
-    clearStoredSession()
-    return null
-  }
-}
-
-function boardsEqual(left: Cell[][], right: Cell[][]) {
-  return (
-    left.length === right.length &&
-    left.every(
-      (row, rowIndex) =>
-        row.length === right[rowIndex]?.length &&
-        row.every((cell, columnIndex) => cell === right[rowIndex][columnIndex]),
-    )
-  )
-}
-
-function acknowledgesPendingCommand(
-  message: ServerMessage,
-  pendingCommand: PendingCommand | null,
-) {
-  if (pendingCommand === null) {
-    return false
-  }
-  if (message.type === 'ERROR') {
-    return true
-  }
-  if (pendingCommand.type === 'DROP_COUNTER') {
-    return (
-      message.type === 'GAME_STATE' &&
-      !boardsEqual(pendingCommand.board, message.payload.board)
-    )
-  }
-  if (pendingCommand.type === 'RESUME_GAME') {
-    return message.type === 'GAME_STATE'
-  }
-  if (pendingCommand.type === 'ABANDON_GAME') {
-    return message.type === 'GAME_ABANDONED'
-  }
-  return message.type === 'GAME_SESSION'
 }
 
 export function useGameSocket(): GameSocket {
@@ -221,13 +104,10 @@ export function useGameSocket(): GameSocket {
 
         switch (message.type) {
           case 'GAME_SESSION':
-            window.localStorage.setItem(
-              GAME_SESSION_STORAGE_KEY,
-              JSON.stringify({
-                gameId: message.payload.game.gameId,
-                playerToken: message.payload.playerToken,
-              } satisfies StoredGameSession),
-            )
+            storeGameSession({
+              gameId: message.payload.game.gameId,
+              playerToken: message.payload.playerToken,
+            })
             setGame(message.payload.game)
             setError(null)
             break

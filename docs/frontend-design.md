@@ -11,31 +11,39 @@ For the complete wire contract, see
 
 ```text
 frontend/src/
-├── main.tsx                 React bootstrap
-├── App.tsx                  Screen composition and input policy
-├── components/
-│   ├── GameSetup.tsx        Computer/create/join form
-│   └── GameBoard.tsx        Board controls and drop animation
-├── hooks/
-│   └── useGameSocket.ts     WebSocket, storage, pending commands, retry
-├── types/
-│   └── protocol.ts          Client and server message unions
-├── test/                    jsdom setup and MockWebSocket
-└── styles.css               Layout, responsive states, and animation
+├── main.tsx                         React bootstrap
+├── app/                             Composition, shell, and app-level tests
+├── domain/game.ts                   Game snapshot and value types
+├── features/
+│   ├── game-setup/                  Setup model, URL policy, form, and state
+│   └── gameplay/                    Game screen, board, status, and selectors
+├── services/game-session/           Semantic actions and WebSocket boundary
+│   ├── useGameSession.ts            UI-facing start, move, and leave actions
+│   ├── useGameSocket.ts             Socket lifecycle and remote state
+│   ├── protocol.ts                  Client and server message unions
+│   ├── protocol.parsers.ts          Runtime envelope parsing
+│   ├── sessionStorage.ts            Resume credential persistence
+│   └── pendingCommand.ts            Command acknowledgement policy
+├── shared/styles/globals.css        Tokens, reset, and shared primitives
+└── test/                            jsdom setup and MockWebSocket
 ```
 
-`main.tsx` mounts `App` in `StrictMode`. Components remain unaware of raw
-WebSocket callbacks: `useGameSocket` adapts that imperative browser API into
-React state and typed commands.
+`main.tsx` mounts `App` in `StrictMode`. `App` composes feature screens and keeps
+the setup model mounted across game transitions. Components remain unaware of
+raw WebSocket callbacks and message envelopes: `useGameSession` exposes semantic
+actions, while `useGameSocket` adapts the imperative browser API into React
+state and typed transport commands.
 
 ## Component and data flow
 
 ```mermaid
 flowchart TB
     Main["main.tsx<br/>mount React"]
-    App["App<br/>screens, setup state, input policy"]
-    Setup["GameSetup<br/>controlled form"]
-    Board["GameBoard<br/>snapshot and animation"]
+    App["App<br/>feature composition"]
+    Setup["GameSetupForm<br/>controlled form"]
+    Screen["GameScreen<br/>gameplay presentation and input policy"]
+    Board["GameBoard<br/>board and animation"]
+    Session["useGameSession<br/>semantic game actions"]
     Hook["useGameSocket<br/>remote and transport state"]
     Protocol["protocol.ts<br/>message unions"]
     Storage[("localStorage<br/>gameId and playerToken")]
@@ -44,14 +52,17 @@ flowchart TB
 
     Main --> App
     App --> Setup
-    App --> Board
-    App --> Hook
+    App --> Screen
+    App --> Session
+    Screen --> Board
+    Session --> Hook
     Hook --> Protocol
     Hook <--> Storage
     Hook <--> Socket
     Socket <--> Server
-    Setup -.->|"start, create, or join intent"| App
-    Board -.->|"column intent"| App
+    Setup -.->|"setup intent"| App
+    Board -.->|"column intent"| Screen
+    Screen -.->|"move or leave action"| Session
 ```
 
 Data and policies flow down through props; setup changes and column selections
@@ -60,7 +71,7 @@ flow upward through callbacks. The backend remains authoritative. Neither
 
 ## UI modes
 
-`GameSetup` is a controlled form driven by `App` state:
+`GameSetupForm` is a controlled form driven by the `useGameSetup` feature hook:
 
 - **Play computer** chooses the human color and whether human or computer moves
   first, then sends `START_GAME`.
@@ -79,7 +90,7 @@ the current origin. If the Clipboard API is missing or rejects the write, the
 visible room code remains available and an accessible recovery message is
 shown.
 
-During a game, `App` displays personalized color, room and status information:
+During a game, `GameScreen` displays personalized color, room and status information:
 waiting for a guest, paused while the opponent is offline, the current turn,
 win, loss, or draw. Online text always states that red moves first.
 
@@ -87,7 +98,8 @@ win, loss, or draw. Online text always states that red moves first.
 
 | State | Owner | Notes |
 | --- | --- | --- |
-| Mode, online action, selected color, first player, room input, and copy result | `App` | Local presentation and form state |
+| Mode, online action, selected color, first player, and room input | `useGameSetup`, mounted by `App` | Local form state preserved across game transitions |
+| Invite-link copy result | `GameScreen` | Local presentation feedback |
 | Connection state, current `GameState`, error, pending command, and manual reconnect trigger | `useGameSocket` | Remote and transport state |
 | `{gameId, playerToken}` | `localStorage` at `connect-four.game-session` | Private bearer credential for resume |
 | Previous board and counters to animate | `GameBoard` | Presentation only |
@@ -130,7 +142,8 @@ typed at compile time but are not fully schema-validated at runtime.
 
 ## Input and pending-command policy
 
-`App` enables a column only when all of these are true:
+`GameScreen`, using `gameplay.selectors.ts`, enables a column only when all of
+these are true:
 
 ```text
 socket connected
@@ -157,22 +170,25 @@ online presence broadcast from enabling another move before the drop response.
 sequenceDiagram
     actor Player
     participant Board as GameBoard
-    participant App
+    participant Screen as GameScreen
+    participant Session as useGameSession
     participant Hook as useGameSocket
     participant Server
     participant Other as Other client
 
     Player->>Board: Choose column
-    Board->>App: onDrop(column)
-    App->>App: Check canPlay
-    App->>Hook: DROP_COUNTER
+    Board->>Screen: onDrop(column)
+    Screen->>Screen: Check canPlay
+    Screen->>Session: dropCounter(column)
+    Session->>Hook: DROP_COUNTER
     Hook->>Hook: Save pending board and disable input
     Hook->>Server: JSON command
     Server-->>Hook: Personalized GAME_STATE
     Server-->>Other: Personalized GAME_STATE
     Hook->>Hook: Confirm board changed and replace snapshot
-    Hook->>App: Render new turn or result
-    App->>Board: New GameState
+    Hook->>Session: New snapshot
+    Session->>Screen: Render new turn or result
+    Screen->>Board: New board
     Board->>Board: Animate newly occupied cell
 ```
 
@@ -251,9 +267,12 @@ chat, spectators, rematches, or match history.
 
 | Change | Primary location |
 | --- | --- |
-| Page-level mode, status text, invite flow, or input policy | `src/App.tsx` |
-| Setup fields | `src/components/GameSetup.tsx` |
-| Board controls or animation | `src/components/GameBoard.tsx` |
-| Socket, retry, storage, or server-message behavior | `src/hooks/useGameSocket.ts` |
-| Wire types and snapshot fields | `src/types/protocol.ts` and backend transport types |
-| Layout, responsive behavior, or motion | `src/styles.css` |
+| App shell, connection banner, or screen composition | `src/app/` |
+| Setup fields, draft state, room normalization, or invite query | `src/features/game-setup/` |
+| Game screen, status text, input policy, board, or animation | `src/features/gameplay/` |
+| UI-facing start, move, or leave behavior | `src/services/game-session/useGameSession.ts` |
+| Socket, retry, storage, acknowledgement, or message parsing | `src/services/game-session/` |
+| Game snapshot/value types | `src/domain/game.ts` |
+| Wire message types | `src/services/game-session/protocol.ts` and backend transport types |
+| Feature layout or motion | The owning feature's CSS file |
+| Tokens, reset, buttons, or global reduced-motion policy | `src/shared/styles/globals.css` |

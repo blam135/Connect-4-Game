@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Cell, GameState } from '../types/protocol'
+import type { Cell, GameState } from '../../domain/game'
 import GameBoard from './GameBoard'
 
 function boardWith(...counters: Array<[number, number, Cell]>) {
@@ -30,15 +30,28 @@ function game(board: Cell[][], computerColumn: number | null): GameState {
 
 describe('GameBoard counter animation', () => {
   it('drops new human and computer counters, with the computer staggered', () => {
+    const initialGame = game(boardWith(), null)
     const { rerender } = render(
-      <GameBoard game={game(boardWith(), null)} disabled={false} onDrop={vi.fn()} />,
+      <GameBoard
+        board={initialGame.board}
+        computerColumn={initialGame.computerColumn}
+        disabled={false}
+        onDrop={vi.fn()}
+      />,
     )
 
     const updatedGame = game(
       boardWith([5, 1, 'RED'], [5, 4, 'YELLOW']),
       4,
     )
-    rerender(<GameBoard game={updatedGame} disabled={false} onDrop={vi.fn()} />)
+    rerender(
+      <GameBoard
+        board={updatedGame.board}
+        computerColumn={updatedGame.computerColumn}
+        disabled={false}
+        onDrop={vi.fn()}
+      />,
+    )
 
     const humanCounter = screen.getByRole('gridcell', {
       name: 'Row 6, column 2: red counter',
@@ -52,12 +65,14 @@ describe('GameBoard counter animation', () => {
     expect(computerCounter).toHaveClass('is-dropping')
     expect(computerCounter).toHaveStyle('--drop-delay: 240ms')
 
+    const nextGame = game(
+      boardWith([4, 1, 'RED'], [5, 1, 'RED'], [5, 4, 'YELLOW']),
+      null,
+    )
     rerender(
       <GameBoard
-        game={game(
-          boardWith([4, 1, 'RED'], [5, 1, 'RED'], [5, 4, 'YELLOW']),
-          null,
-        )}
+        board={nextGame.board}
+        computerColumn={nextGame.computerColumn}
         disabled={false}
         onDrop={vi.fn()}
       />,
@@ -70,9 +85,11 @@ describe('GameBoard counter animation', () => {
   })
 
   it('does not animate counters when a saved game is first restored', () => {
+    const restoredGame = game(boardWith([5, 2, 'RED']), null)
     render(
       <GameBoard
-        game={game(boardWith([5, 2, 'RED']), null)}
+        board={restoredGame.board}
+        computerColumn={restoredGame.computerColumn}
         disabled={false}
         onDrop={vi.fn()}
       />,

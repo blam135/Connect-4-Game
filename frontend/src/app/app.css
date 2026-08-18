@@ -1,0 +1,140 @@
+.app-shell {
+  min-height: 100vh;
+  padding: clamp(1rem, 3vw, 2rem);
+  background:
+    radial-gradient(circle at 8% 8%, rgb(255 212 71 / 22%), transparent 22rem),
+    radial-gradient(circle at 95% 92%, rgb(31 87 214 / 14%), transparent 28rem),
+    #f3f0e9;
+}
+
+.app-frame {
+  width: min(100%, 72rem);
+  min-height: calc(100vh - clamp(2rem, 6vw, 4rem));
+  margin: 0 auto;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: clamp(2rem, 7vw, 5rem);
+}
+
+.brand {
+  display: inline-flex;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--ink);
+  font-family: 'Avenir Next', Avenir, sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.35rem;
+  padding: 0.38rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.2rem;
+  border-radius: 0.65rem;
+  background: var(--blue);
+  box-shadow: 0 0.3rem 0 var(--blue-dark);
+}
+
+.brand-mark span {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.brand-mark span:first-child,
+.brand-mark span:last-child {
+  background: var(--yellow);
+}
+
+.connection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgb(23 32 58 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 60%);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.connection-chip > span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #f5a623;
+}
+
+.connection-chip.connected > span {
+  background: #26a269;
+}
+
+.connection-chip.disconnected > span {
+  background: var(--red);
+}
+
+.connection-banner,
+.error-banner {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 50rem;
+  margin: -2.5rem auto 2rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid #cad7f8;
+  border-radius: 1rem;
+  background: #eef3ff;
+}
+
+.error-banner {
+  border-color: #f7c8ce;
+  background: #fff0f2;
+}
+
+.connection-banner p,
+.error-banner p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.error-banner button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+
+@media (max-width: 760px) {
+  .site-header {
+    margin-bottom: 2.5rem;
+  }
+
+  .connection-banner,
+  .error-banner {
+    margin-top: -1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-shell {
+    padding: 1rem;
+  }
+
+  .brand > span:last-child {
+    display: none;
+  }
+}

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import type { Cell, GameState } from '../types/protocol'
+import type { Cell } from '../../domain/game'
 
 type GameBoardProps = {
-  game: GameState
+  board: Cell[][]
+  computerColumn: number | null
   disabled: boolean
   onDrop: (column: number) => void
 }
@@ -20,15 +21,16 @@ type DropAnimation = {
 
 function findDropAnimation(
   previousBoard: Cell[][] | null,
-  game: GameState,
+  board: Cell[][],
+  computerColumn: number | null,
 ): DropAnimation {
   const counters = new Set<string>()
 
-  game.board.forEach((row, rowIndex) => {
+  board.forEach((row, rowIndex) => {
     row.forEach((cell, columnIndex) => {
       const wasEmpty = previousBoard?.[rowIndex]?.[columnIndex] === 'EMPTY'
       const isOpeningComputerMove =
-        previousBoard === null && game.computerColumn === columnIndex
+        previousBoard === null && computerColumn === columnIndex
 
       if (cell !== 'EMPTY' && (wasEmpty || isOpeningComputerMove)) {
         counters.add(`${rowIndex}:${columnIndex}`)
@@ -37,29 +39,38 @@ function findDropAnimation(
   })
 
   const computerRow =
-    game.computerColumn === null
+    computerColumn === null
       ? null
-      : game.board.findIndex((_, rowIndex) =>
-          counters.has(`${rowIndex}:${game.computerColumn}`),
+      : board.findIndex((_, rowIndex) =>
+          counters.has(`${rowIndex}:${computerColumn}`),
         )
 
-  return { board: game.board, counters, computerRow }
+  return { board, counters, computerRow }
 }
 
-function GameBoard({ game, disabled, onDrop }: GameBoardProps) {
+function GameBoard({
+  board,
+  computerColumn,
+  disabled,
+  onDrop,
+}: GameBoardProps) {
   const [dropAnimation, setDropAnimation] = useState(() =>
-    findDropAnimation(null, game),
+    findDropAnimation(null, board, computerColumn),
   )
 
-  if (dropAnimation.board !== game.board) {
-    setDropAnimation(findDropAnimation(dropAnimation.board, game))
+  if (dropAnimation.board !== board) {
+    setDropAnimation(
+      findDropAnimation(dropAnimation.board, board, computerColumn),
+    )
   }
+
+  const columnCount = board[0]?.length ?? 0
 
   return (
     <div className="board-area">
       <div className="column-controls" aria-label="Choose a column">
-        {Array.from({ length: 7 }, (_, column) => {
-          const isFull = game.board[0]?.[column] !== 'EMPTY'
+        {Array.from({ length: columnCount }, (_, column) => {
+          const isFull = board[0]?.[column] !== 'EMPTY'
           return (
             <button
               key={column}
@@ -75,14 +86,14 @@ function GameBoard({ game, disabled, onDrop }: GameBoardProps) {
       </div>
 
       <div className="game-board" role="grid" aria-label="Connect Four board">
-        {game.board.map((row, rowIndex) => (
+        {board.map((row, rowIndex) => (
           <div className="board-row" role="row" key={rowIndex}>
             {row.map((cell, columnIndex) => {
               const counter = `${rowIndex}:${columnIndex}`
               const isDropping = dropAnimation.counters.has(counter)
               const isComputerCounter =
                 isDropping &&
-                columnIndex === game.computerColumn &&
+                columnIndex === computerColumn &&
                 rowIndex === dropAnimation.computerRow
               const dropStyle = isDropping
                 ? ({

@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { ServerMessage } from '../types/protocol'
+import type { ServerMessage } from '../services/game-session/protocol'
 
 export class MockWebSocket {
   static readonly CONNECTING = 0
