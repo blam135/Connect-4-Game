@@ -258,11 +258,11 @@ build(docker): containerize application
 
 #### 4.2 Add architecture documentation
 
-- [ ] Create `docs/architecture.md`.
-- [ ] Add Mermaid system, component, gameplay, reconnection, lifecycle, and container diagrams.
-- [ ] Document state ownership, concurrency, board conversion, and failure behavior.
-- [ ] Document native and Docker startup commands.
-- [ ] Link the architecture document from the README.
+- [x] Create `docs/architecture.md`.
+- [x] Add Mermaid system, component, gameplay, reconnection, lifecycle, and container diagrams.
+- [x] Document state ownership, concurrency, board conversion, and failure behavior.
+- [x] Document native and Docker startup commands.
+- [x] Link the architecture document from the README.
 
 Suggested commit:
 
