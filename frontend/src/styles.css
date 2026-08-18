@@ -468,37 +468,64 @@ fieldset:disabled .choice-card:hover .choice-content {
 }
 
 .game-board {
+  --board-padding: clamp(0.65rem, 2vw, 1rem);
+
+  position: relative;
   display: grid;
-  padding: clamp(0.65rem, 2vw, 1rem);
+  isolation: isolate;
+  overflow: hidden;
+  padding: var(--board-padding);
   border-radius: clamp(1rem, 3vw, 1.5rem);
   background: var(--blue);
   box-shadow: 0 0.65rem 0 var(--blue-dark), 0 1.5rem 3rem rgb(35 60 120 / 18%);
 }
 
+.game-board::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--board-padding);
+  background: var(--blue);
+  content: '';
+  pointer-events: none;
+}
+
 .board-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: clamp(0.25rem, 1vw, 0.65rem);
-}
-
-.board-row + .board-row {
-  margin-top: clamp(0.25rem, 1vw, 0.65rem);
 }
 
 .board-cell {
+  position: relative;
   aspect-ratio: 1;
-  padding: clamp(0.1rem, 0.5vw, 0.25rem);
-  border-radius: 50%;
-  background: var(--blue-dark);
+  padding: 10.5%;
 }
 
 .board-cell span {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 50%;
   background: #f8f6f0;
   box-shadow: inset 0 0.3rem 0 rgb(17 35 82 / 18%);
+}
+
+.board-cell::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: radial-gradient(
+    circle closest-side,
+    transparent 0 78%,
+    var(--blue-dark) 79% 86%,
+    var(--blue) 87%
+  );
+  content: '';
+  pointer-events: none;
 }
 
 .board-cell.red span {
@@ -509,6 +536,39 @@ fieldset:disabled .choice-card:hover .choice-content {
 .board-cell.yellow span {
   background: var(--yellow);
   box-shadow: inset 0 -0.35rem 0 rgb(128 89 0 / 20%);
+}
+
+.board-cell.is-dropping span {
+  animation: counter-drop 520ms var(--drop-delay) cubic-bezier(0.22, 0.75, 0.32, 1) both;
+  will-change: transform;
+}
+
+.board-cell.is-dropping::before {
+  position: absolute;
+  z-index: 0;
+  inset: 10.5%;
+  border-radius: 50%;
+  background: #f8f6f0;
+  box-shadow: inset 0 0.3rem 0 rgb(17 35 82 / 18%);
+  content: '';
+}
+
+@keyframes counter-drop {
+  0% {
+    transform: translateY(var(--drop-distance));
+  }
+
+  72% {
+    transform: translateY(0);
+  }
+
+  86% {
+    transform: translateY(-10%);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .game-status {
@@ -621,17 +681,14 @@ fieldset:disabled .choice-card:hover .choice-content {
     gap: 0.2rem;
   }
 
-  .game-board,
-  .board-row {
-    gap: 0.25rem;
-  }
-
-  .board-row + .board-row {
-    margin-top: 0.25rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .board-cell.is-dropping span {
+    animation: none;
+    will-change: auto;
+  }
+
   *,
   *::before,
   *::after {
