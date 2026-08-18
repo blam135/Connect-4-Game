@@ -1,6 +1,6 @@
 package com.example.connectfour.websocket;
 
-import com.example.connectfour.game.type.PlayerColor;
+import com.example.connectfour.model.PlayerColor;
 import java.io.IOException;
 import java.util.EnumMap;
 import java.util.Map;

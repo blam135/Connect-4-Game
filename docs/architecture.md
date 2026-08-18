@@ -1,178 +1,177 @@
 # Connect Four architecture
 
-Connect Four is one React client, one Spring Boot process, a raw JSON WebSocket
-protocol, and process-local game state. It supports human-versus-computer and
-room-based online play. The backend is authoritative; clients render
-personalized snapshots and never decide whether a move is legal.
+Connect Four consists of a React browser client and a Spring Boot backend that
+communicate through a raw JSON WebSocket protocol. Players can challenge the
+computer or create an online room for a second browser to join.
 
-Related guides:
+This document stays at the system boundary. Implementation details are covered
+separately:
 
 - [Backend design](backend-design.md)
 - [Frontend design](frontend-design.md)
 - [Spring configuration](spring-configuration.md)
 - [Cloud deployment](cloud-deployment.md)
 
+## Design principles
+
+- **The backend is authoritative.** It decides whether commands are legal and
+  owns boards, turns, results, player seats, and connection presence.
+- **The frontend is a projection of server state.** It renders snapshots,
+  collects player intent, manages connection UX, and never applies game rules.
+- **The protocol is the system boundary.** The two applications share message
+  meanings rather than implementation classes.
+- **A game is process-local.** Sessions and credentials live in backend memory;
+  there is no database or account system.
+- **One game is updated serially.** Accepted commands produce an atomic state
+  change before clients receive their next snapshot.
+
 ## System context
 
 ```mermaid
 flowchart LR
-    Host["Host browser<br/>React client"]
-    Guest["Guest browser<br/>React client"]
-    Edge["Vite or Nginx<br/>HTTP and WebSocket proxy"]
-    Handler["Spring WebSocket handler<br/>/ws/game"]
-    Service["GameService<br/>rules and turns"]
-    Games[("In-memory games<br/>UUID and room-code indexes")]
-    Connections[("Active sockets<br/>game and player color")]
-    AI["Board and depth-4 minimax"]
+    PlayerA["Player A"]
+    PlayerB["Player B<br/>online mode"]
+    ClientA["React client<br/>browser A"]
+    ClientB["React client<br/>browser B"]
+    Edge["Frontend delivery<br/>Vite, Nginx, or Spring static assets"]
+    Backend["Spring Boot backend<br/>WebSocket game service"]
+    State[("Process-local<br/>games and connections")]
+    AI["Connect Four core<br/>depth-4 minimax"]
 
-    Host <-->|"JSON WebSocket"| Edge
-    Guest <-->|"JSON WebSocket"| Edge
-    Edge <--> Handler
-    Handler <--> Connections
-    Handler --> Service
-    Service <--> Games
-    Service --> AI
+    PlayerA --> ClientA
+    PlayerB --> ClientB
+    ClientA <-->|"HTTP assets and JSON WebSocket"| Edge
+    ClientB <-->|"HTTP assets and JSON WebSocket"| Edge
+    Edge <-->|"/ws/game"| Backend
+    Backend <-->|"read and update"| State
+    Backend -->|"computer games only"| AI
 ```
 
-The AI is used only in `COMPUTER` games. An `ONLINE` command applies one
-counter, then broadcasts a seat-specific state to both players.
+The delivery layer changes by environment, but the browser always connects to
+`/ws/game` on its current origin. Development and container proxies forward
+that path to Spring Boot; the cloud image serves both assets and WebSockets
+from the same process.
 
-## Component responsibilities
+## System responsibilities
 
-- `App` owns setup choices and derives whether board input is enabled.
-- `GameSetup` renders computer/create/join forms and normalizes room-code input.
-- `GameBoard` renders server snapshots and applies presentation-only drop
-  animation.
-- `useGameSocket` owns the browser socket, pending-command state, reconnection,
-  and the saved player credential.
-- `GameWebSocketHandler` validates envelopes, binds sockets to seats, dispatches
-  commands, broadcasts state, and translates failures.
-- `GameService` owns room creation, seat assignment, authentication, game rules,
-  turn changes, presence, abandonment, and snapshot conversion.
-- `InMemoryGameRegistry` indexes sessions by UUID and online games by room code.
-- `GameConnectionRegistry` stores the current socket for each `(gameId, color)`.
-- `Board` and `Computer` preserve counter stacking and minimax behavior.
+```mermaid
+flowchart LR
+    subgraph Frontend["React frontend"]
+        UI["Views and controls"]
+        ClientState["UI, connection, and snapshot state"]
+        Connection["WebSocket lifecycle"]
+
+        UI <--> ClientState
+        ClientState <--> Connection
+    end
+
+    subgraph Backend["Spring Boot backend"]
+        Protocol["Protocol boundary"]
+        Game["Authoritative game behavior"]
+        Memory["Games, seats, and connections"]
+
+        Protocol <--> Game
+        Game <--> Memory
+    end
+
+    Connection <-->|"JSON messages"| Protocol
+```
+
+| Boundary | Responsibilities |
+| --- | --- |
+| React client | Render setup and game views, collect commands, disable unsafe input, animate snapshots, persist the resume credential, and reconnect |
+| Spring Boot backend | Validate commands and credentials, own game rules and lifecycle, manage seats and presence, invoke the computer player, and publish personalized snapshots |
+| WebSocket protocol | Carry commands, snapshots, session credentials, abandonment notices, and structured errors |
+| In-memory state | Hold active games, online room lookup, player credentials, and active socket ownership |
+| Delivery layer | Serve browser assets and route WebSocket upgrades to the backend |
+
+Neither client can modify another client's state directly. In online mode both
+browsers send commands to the same authoritative game, and the backend
+broadcasts the resulting view to each seat.
 
 ## State ownership
 
-| State | Owner | Lifetime |
+| State | Authoritative owner | Client behavior |
 | --- | --- | --- |
-| Board, mode, status, turn, seats, tokens, room code, and presence | Backend `GameSession` | Until explicit abandonment or process restart |
-| UUID-to-session and room-code-to-UUID indexes | `InMemoryGameRegistry` | Process-local only |
-| Active socket for each player seat | `GameConnectionRegistry` | Until disconnect, replacement, or abandonment |
-| Latest personalized `GameState` | React `useGameSocket` | Replaced by each accepted server snapshot |
-| `{gameId, playerToken}` resume credential | Browser `localStorage` under `connect-four.game-session` | Until abandonment or an invalid/missing session response |
-| Setup mode, create/join choice, colors, room input, and copy feedback | React `App` | Current page lifetime |
+| Board, mode, status, starting color, and current turn | Backend game session | Replace the rendered snapshot when the server sends an update |
+| Online seats, room code, and connection presence | Backend game session | Display room and opponent state; pause input while an opponent is offline |
+| Player credential | Backend issues and validates it | Store `{gameId, playerToken}` in browser `localStorage` for resume |
+| Active socket for each seat | Backend connection state | Treat a replaced connection as no longer authoritative |
+| Setup selections and temporary UI feedback | React client | Keep only for the current browser page |
+| Animation bookkeeping | React client | Affect presentation only, never game legality |
 
-Player tokens act as bearer credentials for one seat. They and the room state
-are held in memory; there is no database or account system. A room code lets the
-first guest claim the unoccupied seat but does not replace the private token
-used for reconnection.
+The room code is an invitation identifier, while the private player token is a
+bearer credential for one seat. Browser storage contains no authoritative board
+or turn data.
 
 ## WebSocket protocol
 
-Every message is an envelope with a string `type` and a `payload`. Client
-commands are:
+Every message uses an envelope with a string `type` and a `payload` object.
 
-```ts
-{ type: 'START_GAME', payload: { humanColor, firstPlayer } }
-{ type: 'CREATE_ONLINE_GAME', payload: { hostColor } }
-{ type: 'JOIN_ONLINE_GAME', payload: { roomCode } }
-{ type: 'RESUME_GAME', payload: { gameId, playerToken } }
-{ type: 'DROP_COUNTER', payload: { column } }
-{ type: 'ABANDON_GAME', payload: {} }
-```
+### Client commands
 
-`humanColor` and `hostColor` are `RED | YELLOW`; `firstPlayer` is
-`HUMAN | COMPUTER`; `column` is zero-based. The server trims and uppercases
-room codes. The browser additionally removes non-alphanumeric characters and
-limits input to six characters.
+| Command | Purpose |
+| --- | --- |
+| `START_GAME` | Start a human-versus-computer game |
+| `CREATE_ONLINE_GAME` | Create an online room and claim the host seat |
+| `JOIN_ONLINE_GAME` | Claim the remaining seat using a room code |
+| `RESUME_GAME` | Reclaim a seat using a game ID and player token |
+| `DROP_COUNTER` | Request a move in a zero-based column |
+| `ABANDON_GAME` | Leave and remove the current game |
 
-Server messages are:
+### Server messages
 
-```ts
-{ type: 'GAME_SESSION', payload: { playerToken, game } }
-{ type: 'GAME_STATE', payload: game }
-{ type: 'GAME_ABANDONED', payload: { reason: 'YOU_LEFT' | 'OPPONENT_LEFT' } }
-{ type: 'ERROR', payload: { code, message, recoverable } }
-```
+| Message | Purpose |
+| --- | --- |
+| `GAME_SESSION` | Return a newly issued player token and initial game snapshot |
+| `GAME_STATE` | Replace the client's current personalized snapshot |
+| `GAME_ABANDONED` | Tell one or both clients that the game was removed |
+| `ERROR` | Report a structured recoverable or non-recoverable failure |
 
-`GAME_SESSION` is returned only when a computer game or online seat is first
-created or claimed; the client stores its token. A successful `RESUME_GAME`
-returns `GAME_STATE` because the client already holds the token. Online joins,
-moves, presence changes, and resumes also send `GAME_STATE` broadcasts to the
-other connected seat.
+A game snapshot carries the mode, board, status, the receiving player's color,
+starting color, current turn, room information, opponent presence, and an
+optional computer-move animation hint. Online snapshots are personalized so
+each browser sees the same game from its own seat.
 
-The generalized snapshot is:
+The Java and TypeScript message models must evolve together. See the detailed
+guides for their class and component ownership.
 
-```ts
-type GameState = {
-  gameId: string
-  mode: 'COMPUTER' | 'ONLINE'
-  board: ('EMPTY' | 'RED' | 'YELLOW')[][]
-  status:
-    | 'WAITING_FOR_OPPONENT'
-    | 'IN_PROGRESS'
-    | 'RED_WON'
-    | 'YELLOW_WON'
-    | 'DRAW'
-  yourColor: 'RED' | 'YELLOW'
-  startingColor: 'RED' | 'YELLOW'
-  currentTurn: 'RED' | 'YELLOW' | null
-  roomCode: string | null
-  opponentConnected: boolean
-  computerColumn: number | null
-}
-```
-
-`yourColor` and `opponentConnected` are personalized for the receiving seat.
-`roomCode` is non-null only online. `computerColumn` identifies the AI move for
-animation and is otherwise null. `currentTurn` becomes null after a win or draw.
-
-## Gameplay flows
-
-### Online room
+## Gameplay flow
 
 ```mermaid
 sequenceDiagram
-    actor Host
-    participant HostUI as Host client
-    participant Server
-    participant GuestUI as Guest client
-    actor Guest
+    actor Player
+    participant Client as React client
+    participant Backend as Spring Boot backend
+    participant Other as Other online client
 
-    Host->>HostUI: Choose online, create, and color
-    HostUI->>Server: CREATE_ONLINE_GAME(hostColor)
-    Server-->>HostUI: GAME_SESSION(token, WAITING_FOR_OPPONENT)
-    HostUI-->>Host: Show room code and invite link
-    Guest->>GuestUI: Open invite or enter room code
-    GuestUI->>Server: JOIN_ONLINE_GAME(roomCode)
-    Server-->>GuestUI: GAME_SESSION(token, IN_PROGRESS)
-    Server-->>HostUI: GAME_STATE(IN_PROGRESS)
-    Note over HostUI,GuestUI: Host keeps chosen color; guest gets the other color; red starts
-    loop Until win or draw
-        HostUI->>Server: DROP_COUNTER(column)
-        Server-->>HostUI: Personalized GAME_STATE
-        Server-->>GuestUI: Personalized GAME_STATE
-        GuestUI->>Server: DROP_COUNTER(column)
-        Server-->>HostUI: Personalized GAME_STATE
-        Server-->>GuestUI: Personalized GAME_STATE
+    alt Computer game
+        Player->>Client: Choose color and first player
+        Client->>Backend: START_GAME
+        Backend-->>Client: GAME_SESSION
+        Player->>Client: Select column
+        Client->>Backend: DROP_COUNTER
+        Backend->>Backend: Apply human move and computer response atomically
+        Backend-->>Client: GAME_STATE
+    else Online game
+        Player->>Client: Create room or join by code
+        Client->>Backend: CREATE_ONLINE_GAME or JOIN_ONLINE_GAME
+        Backend-->>Client: GAME_SESSION
+        Backend-->>Other: GAME_STATE
+        Player->>Client: Select column on own turn
+        Client->>Backend: DROP_COUNTER
+        Backend->>Backend: Validate seat, turn, presence, and move
+        Backend-->>Client: Personalized GAME_STATE
+        Backend-->>Other: Personalized GAME_STATE
     end
 ```
 
-The sequence alternates by color rather than by host/guest: if the host chooses
-yellow, the guest makes the first move. The server rejects moves before the
-second player joins, out of turn, or while either player is disconnected.
+Computer games return one snapshot after the human and AI portions of the turn.
+Online games apply one counter at a time and broadcast the result to both seats.
+Red always starts an online game, regardless of whether red belongs to the host
+or guest.
 
-### Computer game
-
-`START_GAME` creates a private `COMPUTER` session. The human chooses their color
-and whether the human or computer starts. For each human move, `GameService`
-holds the session lock, applies the human counter, calculates the depth-4
-minimax response if the game continues, applies it, and returns one snapshot.
-This preserves the original atomic human-plus-computer turn and animation hint.
-
-## Game states and presence
+## Game lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -182,101 +181,106 @@ stateDiagram-v2
     state "YELLOW_WON" as YellowWon
     state "DRAW" as Draw
 
-    [*] --> Waiting: CREATE_ONLINE_GAME
-    [*] --> InProgress: START_GAME
-    Waiting --> InProgress: First guest claims remaining seat
+    [*] --> Waiting: Create online game
+    [*] --> InProgress: Start computer game
+    Waiting --> InProgress: Guest joins
     InProgress --> RedWon: Red connects four
     InProgress --> YellowWon: Yellow connects four
     InProgress --> Draw: Board becomes full
 ```
 
-Disconnecting does not change `GameStatus`; it makes `opponentConnected` false
-in the other player's snapshot and therefore pauses controls. Reconnection
-restores presence and play at the existing `currentTurn`. `ABANDON_GAME` removes
-the session from both indexes from any status and notifies both seats.
+Disconnecting does not change the game status. It changes presence and pauses
+online play until the missing seat resumes. Completed games remain available
+for resume until a player abandons them or the backend process stops.
 
-## Reconnection and seat replacement
+## Reconnection and replacement
 
 ```mermaid
 sequenceDiagram
-    participant Browser
-    participant Storage as localStorage
-    participant Handler
-    participant Connections as Connection registry
-    participant Game as Game session
-    participant Opponent
+    participant Client as React client
+    participant Storage as Browser storage
+    participant Backend as Spring Boot backend
+    participant State as In-memory game
+    participant Other as Other online client
 
-    Browser-xHandler: Socket closes unexpectedly
-    Handler->>Connections: Detach only if this is still the active seat socket
-    Handler->>Game: Mark seat disconnected
-    Handler-->>Opponent: GAME_STATE(opponentConnected false)
-    loop 250, 500, 1000, then 2000 ms
-        Browser->>Handler: Reopen /ws/game
+    Client-xBackend: WebSocket closes
+    Backend->>State: Mark seat disconnected
+    Backend-->>Other: GAME_STATE with opponent offline
+    loop Bounded exponential retry
+        Client->>Backend: Reopen /ws/game
     end
-    Browser->>Storage: Read gameId and playerToken
-    Browser->>Handler: RESUME_GAME(gameId, playerToken)
-    Handler->>Game: Authenticate token and mark seat connected
-    Handler->>Connections: Replace socket for this game and color
-    Handler-->>Browser: GAME_STATE
-    Handler-->>Opponent: GAME_STATE(opponentConnected true)
+    Client->>Storage: Read game ID and player token
+    Client->>Backend: RESUME_GAME
+    Backend->>State: Validate credential and restore presence
+    Backend-->>Client: Current GAME_STATE
+    Backend-->>Other: GAME_STATE with opponent online
 ```
 
-The latest valid resume wins only for that player color. The replaced socket is
-closed with reason `Game resumed on another connection`; it cannot move or mark
-the seat offline afterward. The client reports `SESSION_REPLACED` and does not
-automatically compete for the seat. Other socket failures retry four times,
-then expose a manual reconnect action while retaining the saved credential.
+The latest valid resume replaces the previous socket for that seat. A replaced
+client stops retrying so two tabs do not compete indefinitely. If the backend
+no longer has the game or rejects the token, the frontend clears the saved
+credential and returns to setup.
 
-## Concurrency and failure behavior
+## Consistency and failure model
 
-The backend combines concurrent maps with two locking levels:
+Commands for one game are serialized by the backend. A client disables move
+controls while awaiting a response, but this is only a usability measure; the
+backend validates every command independently.
 
-- a striped game lock in `GameConnectionRegistry` serializes connection
-  attachment, presence updates, broadcasts, moves, and abandonment for a game;
-- `synchronized (GameSession)` protects domain state and makes each accepted
-  turn atomic.
+Failures fall into five system-level categories:
 
-Outgoing writes are synchronized per WebSocket session. These guarantees are
-process-local and assume one backend instance.
+| Category | System behavior |
+| --- | --- |
+| Invalid message or move | Reject without changing accepted game state; keep the connection usable when recovery is possible |
+| Invalid room or credential | Do not claim a seat; clear stale saved credentials when the session cannot be resumed |
+| Temporary connection loss | Preserve the game, disable controls, retry, and resume from the backend snapshot |
+| Explicit abandonment | Remove the game and notify every connected participant |
+| Unexpected backend failure | Return a generic non-recoverable error without exposing internals |
 
-| Failure | Response or client behavior | Effect |
-| --- | --- | --- |
-| Malformed JSON, missing/unknown type, or invalid payload | Recoverable `ERROR` such as `MALFORMED_MESSAGE`, `INVALID_MESSAGE`, or `UNKNOWN_MESSAGE` | Connection remains usable |
-| Unknown/full room | Recoverable `ROOM_NOT_FOUND` or `ROOM_FULL` | No seat is claimed |
-| Invalid column, full column, wrong turn, or offline opponent | Recoverable `INVALID_COLUMN`, `COLUMN_FULL`, `NOT_YOUR_TURN`, or `OPPONENT_OFFLINE` | No move is accepted |
-| Command before binding | Recoverable `NO_ACTIVE_GAME` | Client must start, join, or resume |
-| Start/join/resume on a bound socket | Recoverable `CONNECTION_ALREADY_BOUND` | Existing binding remains active |
-| Missing game or invalid player token | Non-recoverable `GAME_NOT_FOUND` or `INVALID_PLAYER_TOKEN` | Client clears the saved credential and returns to setup |
-| Move after win or draw | Non-recoverable `GAME_FINISHED` | Terminal session remains resumable |
-| Replaced socket sends a command | Non-recoverable `STALE_CONNECTION` | Newest socket remains authoritative |
-| Explicit leave | `GAME_ABANDONED` with `YOU_LEFT` or `OPPONENT_LEFT` | Room and both active bindings are removed |
-| Invalid server envelope | Client `INVALID_SERVER_MESSAGE` error | Message is ignored |
-| Unexpected server failure | Non-recoverable `INTERNAL_ERROR` | Internal details stay server-side |
+These guarantees apply within one backend process. Durable state and
+multi-replica coordination are outside the current architecture.
 
-## Board representation
+## Runtime topology
 
-The preserved core and the API use opposite row orientations:
+```mermaid
+flowchart TB
+    subgraph Native["Native development"]
+        DevBrowser["Browser<br/>localhost:5173"]
+        Vite["Vite dev server"]
+        DevBackend["Spring Boot<br/>localhost:8080"]
+        DevBrowser --> Vite
+        Vite -->|"proxy /ws/game"| DevBackend
+    end
 
-| Layer | Row `0` | Empty/red/yellow values |
-| --- | --- | --- |
-| Core `Board` | Bottom row | `.`, `r`, `y` |
-| `GameState` and React | Top row | `EMPTY`, `RED`, `YELLOW` |
+    subgraph Compose["Docker Compose"]
+        DockerBrowser["Browser<br/>localhost:3000"]
+        Nginx["Frontend container<br/>Nginx and React assets"]
+        DockerBackend["Backend container<br/>Spring Boot"]
+        DockerBrowser --> Nginx
+        Nginx -->|"internal /ws/game proxy"| DockerBackend
+    end
 
-`GameService` reverses row order when creating an immutable snapshot; columns
-remain unchanged.
+    subgraph Cloud["Cloud deployment"]
+        PublicBrowser["Browser"]
+        Combined["Single Spring Boot service<br/>React assets and /ws/game"]
+        PublicBrowser --> Combined
+    end
+```
 
-## Running and testing locally
+Native development optimizes feedback, Compose mirrors separate frontend and
+backend containers, and the cloud image combines both artifacts so WebSocket
+state and HTTP traffic reach the same process.
 
-### Native development
+## Running locally
 
-With Java 21 and Node.js 24 or newer, start Spring Boot:
+With Java 21 and Node.js 24 or newer, start the backend:
 
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
 
-In a second terminal, start Vite:
+Start the frontend in another terminal:
 
 ```bash
 cd frontend
@@ -284,41 +288,28 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. To exercise online play, create a room in one
-browser and join it from a different browser, profile, or private window. The
-two players must not share `localStorage`, because each origin stores one
-`connect-four.game-session` credential.
+Open `http://localhost:5173`. Test online play with separate browser storage
+contexts so each player has a different saved credential.
 
-Verify that red starts, turns alternate, closing one browser pauses the other,
-reopening it resumes the same seat, and **Leave game** returns both clients to
-setup. Also test the invite link form `?room=ABC123`.
-
-### Docker Compose
+Alternatively, from the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-Open `http://localhost:3000` in two separate browser storage contexts. Stop the
-containers with `docker compose down`.
-
-Automated checks:
+Open `http://localhost:3000`. Stop the containers with:
 
 ```bash
-cd frontend
-npm test
-npm run build
-npm run lint
-
-cd ../backend
-./mvnw test
+docker compose down
 ```
 
 ## Current boundaries
 
-- There is no database, account system, player naming, matchmaking, chat,
-  spectator mode, rematch flow, or durable event history.
-- Rooms, tokens, games, and presence disappear on backend restart or cloud
-  sleep; a saved browser credential cannot restore missing server state.
-- One process is authoritative. Multiple replicas would require shared durable
-  state, distributed coordination/broadcasting, and connection-aware routing.
+- Games, rooms, credentials, and presence disappear when the backend process
+  stops, sleeps, or is redeployed.
+- One backend process is authoritative; horizontal scaling would require shared
+  state, distributed coordination, broadcasting, and connection-aware routing.
+- There is no account system, database, matchmaking, chat, spectator mode,
+  rematch flow, or durable match history.
+- Public deployment details and free-service behavior are documented in
+  [Cloud deployment](cloud-deployment.md).

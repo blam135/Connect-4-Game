@@ -1,4 +1,4 @@
-package com.example.connectfour.game.service;
+package com.example.connectfour.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,15 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.example.connectfour.game.error.GameErrorCode;
-import com.example.connectfour.game.error.GameException;
-import com.example.connectfour.game.model.GameAccess;
-import com.example.connectfour.game.model.GameSnapshot;
-import com.example.connectfour.game.type.Cell;
-import com.example.connectfour.game.type.FirstPlayer;
-import com.example.connectfour.game.type.GameMode;
-import com.example.connectfour.game.type.GameStatus;
-import com.example.connectfour.game.type.PlayerColor;
+import com.example.connectfour.dto.GameAccess;
+import com.example.connectfour.dto.GameSnapshot;
+import com.example.connectfour.exception.GameErrorCode;
+import com.example.connectfour.exception.GameException;
+import com.example.connectfour.model.Cell;
+import com.example.connectfour.model.FirstPlayer;
+import com.example.connectfour.model.GameMode;
+import com.example.connectfour.model.GameSession;
+import com.example.connectfour.model.GameStatus;
+import com.example.connectfour.model.PlayerColor;
+import com.example.connectfour.repository.InMemoryGameRepository;
 import com.example.connectfour.core.Board;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +34,13 @@ import org.junit.jupiter.api.Test;
 
 class GameServiceTest {
 
-    private InMemoryGameRegistry registry;
+    private InMemoryGameRepository repository;
     private GameService service;
 
     @BeforeEach
     void setUp() {
-        registry = new InMemoryGameRegistry();
-        service = new GameService(registry);
+        repository = new InMemoryGameRepository();
+        service = new GameService(repository);
     }
 
     @Test
@@ -109,7 +111,7 @@ class GameServiceTest {
     @Test
     void rejectsAResumeWhenTheSessionIsRemovedWhileWaitingForItsLock() throws Exception {
         GameAccess started = service.startGame(PlayerColor.RED, FirstPlayer.HUMAN);
-        GameSession session = registry.find(started.game().gameId()).orElseThrow();
+        GameSession session = repository.find(started.game().gameId()).orElseThrow();
         AtomicReference<Throwable> result = new AtomicReference<>();
         Thread resumeThread = Thread.ofPlatform().unstarted(() -> {
             try {
@@ -127,7 +129,7 @@ class GameServiceTest {
                 Thread.onSpinWait();
             }
             assertEquals(Thread.State.BLOCKED, resumeThread.getState());
-            assertTrue(registry.remove(started.game().gameId(), session));
+            assertTrue(repository.remove(started.game().gameId(), session));
         }
         resumeThread.join();
 
@@ -407,7 +409,7 @@ class GameServiceTest {
 
     private UUID registerComputer(PlayerColor humanColor, String... rows) {
         UUID gameId = UUID.randomUUID();
-        registry.register(GameSession.computer(
+        repository.register(GameSession.computer(
                 gameId,
                 board(rows),
                 humanColor,

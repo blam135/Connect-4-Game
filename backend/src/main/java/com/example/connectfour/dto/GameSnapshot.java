@@ -1,9 +1,9 @@
-package com.example.connectfour.game.model;
+package com.example.connectfour.dto;
 
-import com.example.connectfour.game.type.Cell;
-import com.example.connectfour.game.type.GameMode;
-import com.example.connectfour.game.type.GameStatus;
-import com.example.connectfour.game.type.PlayerColor;
+import com.example.connectfour.model.Cell;
+import com.example.connectfour.model.GameMode;
+import com.example.connectfour.model.GameStatus;
+import com.example.connectfour.model.PlayerColor;
 
 import java.util.List;
 import java.util.UUID;

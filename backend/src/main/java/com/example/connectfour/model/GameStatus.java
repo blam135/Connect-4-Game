@@ -1,4 +1,4 @@
-package com.example.connectfour.game.type;
+package com.example.connectfour.model;
 
 public enum GameStatus {
     WAITING_FOR_OPPONENT,

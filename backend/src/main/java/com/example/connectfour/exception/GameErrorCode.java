@@ -1,4 +1,4 @@
-package com.example.connectfour.game.error;
+package com.example.connectfour.exception;
 
 public enum GameErrorCode {
     GAME_NOT_FOUND,

@@ -1,3 +1,3 @@
-package com.example.connectfour.game.model;
+package com.example.connectfour.dto;
 
 public record GameAccess(String playerToken, GameSnapshot game) {}

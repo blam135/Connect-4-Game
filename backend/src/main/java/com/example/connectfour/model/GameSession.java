@@ -1,15 +1,12 @@
-package com.example.connectfour.game.service;
+package com.example.connectfour.model;
 
 import com.example.connectfour.core.Board;
-import com.example.connectfour.game.type.GameMode;
-import com.example.connectfour.game.type.GameStatus;
-import com.example.connectfour.game.type.PlayerColor;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.UUID;
 
-final class GameSession {
+public final class GameSession {
 
     private final UUID id;
     private final Board board;
@@ -41,7 +38,7 @@ final class GameSession {
         this.currentTurn = currentTurn;
     }
 
-    static GameSession computer(
+    public static GameSession computer(
             UUID id,
             Board board,
             PlayerColor humanColor,
@@ -60,7 +57,7 @@ final class GameSession {
         return session;
     }
 
-    static GameSession online(
+    public static GameSession online(
             UUID id,
             Board board,
             PlayerColor hostColor,
@@ -79,63 +76,63 @@ final class GameSession {
         return session;
     }
 
-    UUID id() {
+    public UUID id() {
         return id;
     }
 
-    Board board() {
+    public Board board() {
         return board;
     }
 
-    GameMode mode() {
+    public GameMode mode() {
         return mode;
     }
 
-    PlayerColor startingColor() {
+    public PlayerColor startingColor() {
         return startingColor;
     }
 
-    PlayerColor computerHumanColor() {
+    public PlayerColor computerHumanColor() {
         return computerHumanColor;
     }
 
-    PlayerColor computerColor() {
+    public PlayerColor computerColor() {
         return computerHumanColor.opponent();
     }
 
-    String roomCode() {
+    public String roomCode() {
         return roomCode;
     }
 
-    GameStatus status() {
+    public GameStatus status() {
         return status;
     }
 
-    void setStatus(GameStatus status) {
+    public void setStatus(GameStatus status) {
         this.status = status;
     }
 
-    PlayerColor currentTurn() {
+    public PlayerColor currentTurn() {
         return currentTurn;
     }
 
-    void setCurrentTurn(PlayerColor currentTurn) {
+    public void setCurrentTurn(PlayerColor currentTurn) {
         this.currentTurn = currentTurn;
     }
 
-    boolean hasPlayer(PlayerColor color) {
+    public boolean hasPlayer(PlayerColor color) {
         return playerTokens.containsKey(color);
     }
 
-    boolean hasBothOnlinePlayers() {
+    public boolean hasBothOnlinePlayers() {
         return playerTokens.size() == 2;
     }
 
-    void addPlayer(PlayerColor color, String token) {
+    public void addPlayer(PlayerColor color, String token) {
         playerTokens.put(color, token);
     }
 
-    PlayerColor authenticate(String token) {
+    public PlayerColor authenticate(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
@@ -146,7 +143,7 @@ final class GameSession {
                 .orElse(null);
     }
 
-    void setConnected(PlayerColor color, boolean connected) {
+    public void setConnected(PlayerColor color, boolean connected) {
         if (connected) {
             connectedPlayers.add(color);
         } else {
@@ -154,7 +151,7 @@ final class GameSession {
         }
     }
 
-    boolean isConnected(PlayerColor color) {
+    public boolean isConnected(PlayerColor color) {
         return connectedPlayers.contains(color);
     }
 }

@@ -1,6 +1,6 @@
-package com.example.connectfour.websocket;
+package com.example.connectfour.config;
 
-import com.example.connectfour.config.ConnectFourProperties;
+import com.example.connectfour.websocket.GameWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;

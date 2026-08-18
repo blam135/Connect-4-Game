@@ -1,4 +1,4 @@
-package com.example.connectfour.game.error;
+package com.example.connectfour.exception;
 
 public class GameException extends RuntimeException {
 

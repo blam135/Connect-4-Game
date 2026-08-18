@@ -1,16 +1,18 @@
-package com.example.connectfour.game.service;
+package com.example.connectfour.service;
 
 import com.example.connectfour.core.Board;
 import com.example.connectfour.core.Computer;
-import com.example.connectfour.game.error.GameErrorCode;
-import com.example.connectfour.game.error.GameException;
-import com.example.connectfour.game.model.GameAccess;
-import com.example.connectfour.game.model.GameSnapshot;
-import com.example.connectfour.game.type.Cell;
-import com.example.connectfour.game.type.FirstPlayer;
-import com.example.connectfour.game.type.GameMode;
-import com.example.connectfour.game.type.GameStatus;
-import com.example.connectfour.game.type.PlayerColor;
+import com.example.connectfour.dto.GameAccess;
+import com.example.connectfour.dto.GameSnapshot;
+import com.example.connectfour.exception.GameErrorCode;
+import com.example.connectfour.exception.GameException;
+import com.example.connectfour.model.Cell;
+import com.example.connectfour.model.FirstPlayer;
+import com.example.connectfour.model.GameMode;
+import com.example.connectfour.model.GameSession;
+import com.example.connectfour.model.GameStatus;
+import com.example.connectfour.model.PlayerColor;
+import com.example.connectfour.repository.InMemoryGameRepository;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -31,11 +33,11 @@ public class GameService {
     private static final int RED_WIN_SCORE = 10000;
     private static final int YELLOW_WIN_SCORE = -10000;
 
-    private final InMemoryGameRegistry registry;
+    private final InMemoryGameRepository repository;
     private final SecureRandom random = new SecureRandom();
 
-    public GameService(InMemoryGameRegistry registry) {
-        this.registry = registry;
+    public GameService(InMemoryGameRepository repository) {
+        this.repository = repository;
     }
 
     public GameAccess startGame(PlayerColor humanColor, FirstPlayer firstPlayer) {
@@ -61,7 +63,7 @@ public class GameService {
             computerColumn = playComputerMove(session);
         }
 
-        registry.register(session);
+        repository.register(session);
         return new GameAccess(playerToken, snapshot(session, humanColor, computerColumn));
     }
 
@@ -78,7 +80,7 @@ public class GameService {
                     hostColor,
                     playerToken,
                     newRoomCode());
-            if (registry.registerOnline(session)) {
+            if (repository.registerOnline(session)) {
                 return new GameAccess(playerToken, snapshot(session, hostColor, null));
             }
         }
@@ -186,7 +188,7 @@ public class GameService {
         GameSession session = requireSession(gameId);
         synchronized (session) {
             ensurePlayer(session, playerColor);
-            if (!registry.remove(gameId, session)) {
+            if (!repository.remove(gameId, session)) {
                 throw gameNotFound(gameId);
             }
         }
@@ -298,16 +300,16 @@ public class GameService {
         if (gameId == null) {
             throw gameNotFound(null);
         }
-        return registry.find(gameId).orElseThrow(() -> gameNotFound(gameId));
+        return repository.find(gameId).orElseThrow(() -> gameNotFound(gameId));
     }
 
     private GameSession requireRoom(String roomCode) {
-        return registry.findByRoomCode(roomCode)
+        return repository.findByRoomCode(roomCode)
                 .orElseThrow(() -> roomNotFound(roomCode));
     }
 
     private void ensureRegistered(GameSession session) {
-        if (registry.find(session.id()).orElse(null) != session) {
+        if (repository.find(session.id()).orElse(null) != session) {
             throw gameNotFound(session.id());
         }
     }

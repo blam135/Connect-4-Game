@@ -1,13 +1,13 @@
 package com.example.connectfour.websocket;
 
-import com.example.connectfour.game.error.GameErrorCode;
-import com.example.connectfour.game.error.GameException;
-import com.example.connectfour.game.model.GameAccess;
-import com.example.connectfour.game.model.GameSnapshot;
-import com.example.connectfour.game.service.GameService;
-import com.example.connectfour.game.type.FirstPlayer;
-import com.example.connectfour.game.type.GameMode;
-import com.example.connectfour.game.type.PlayerColor;
+import com.example.connectfour.dto.GameAccess;
+import com.example.connectfour.dto.GameSnapshot;
+import com.example.connectfour.exception.GameErrorCode;
+import com.example.connectfour.exception.GameException;
+import com.example.connectfour.model.FirstPlayer;
+import com.example.connectfour.model.GameMode;
+import com.example.connectfour.model.PlayerColor;
+import com.example.connectfour.service.GameService;
 import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
