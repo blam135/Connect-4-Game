@@ -5,7 +5,7 @@
 # Build this file with the repository root as its context. For the separate
 # local containers, use compose.yaml instead.
 
-FROM node:24-alpine AS frontend-build
+FROM node:24.22.1-alpine AS frontend-build
 
 WORKDIR /workspace/frontend
 

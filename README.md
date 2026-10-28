@@ -11,7 +11,7 @@ seats, connection presence, and results.
 
 ## Run locally
 
-Prerequisites: Java 21 and Node.js 24 or newer.
+Prerequisites: Java 21 and Node.js 24.22.1+ or 26.12.1+ within those major releases. Run `nvm use` in `frontend` to select the pinned version; npm enforces the patched minimums.
 
 The backend `Makefile` provides shortcuts for its common development commands:
 
